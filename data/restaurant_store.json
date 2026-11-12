@@ -1,0 +1,14 @@
+{
+  "tables": [],
+  "orders": [],
+  "kitchenTickets": [],
+  "auditLogs": [],
+  "menuCategories": [],
+  "staffUsers": [],
+  "loginSessions": [],
+  "staffActivityLogs": [],
+  "historicalSales": [],
+  "currentBusinessDate": "2026-11-12",
+  "dailyOrderSequence": 0,
+  "dailyInvoiceSequence": 0
+}
