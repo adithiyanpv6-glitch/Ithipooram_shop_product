@@ -266,7 +266,7 @@ if (!global.__ITHIPOORAM_DB__) {
 }
 
 
-const isVercel = process.env.VERCEL === '1' || (process.env.NODE_ENV === 'production' && !process.env.LOCAL_DEV);
+const isVercel = process.env.VERCEL === '1';
 const DB_FILE_PATH = isVercel ? path.join('/tmp', 'restaurant_store.json') : path.join(process.cwd(), 'data', 'restaurant_store.json');
 
 export function persistDb() {
