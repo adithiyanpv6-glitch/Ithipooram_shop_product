@@ -11,7 +11,6 @@ import {
   Flame, 
   RefreshCw,
   BellRing,
-  ArrowLeft,
   Check,
   Utensils
 } from 'lucide-react';
@@ -227,15 +226,11 @@ export default function KitchenDisplayPage() {
       <header className="bg-white border-b border-zinc-200 px-4 sm:px-6 py-3.5 sticky top-0 z-30 shadow-xs">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 max-w-7xl mx-auto w-full">
           
-          {/* Left: Heading Starts from Left Perfectly */}
+          {/* Left: Heading Starts from Left Perfectly (Dedicated Kitchen Badge - No Exit Links) */}
           <div className="flex items-center space-x-3">
-            <Link
-              href="/"
-              className="p-2 rounded-xl border border-zinc-200 hover:border-black text-zinc-600 hover:text-black transition"
-              title="Back to Admin Dashboard"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </Link>
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shadow-xs shrink-0">
+              <ChefHat className="w-5 h-5" />
+            </div>
 
             <div>
               <div className="flex items-center space-x-2">

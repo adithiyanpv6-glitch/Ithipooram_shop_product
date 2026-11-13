@@ -47,8 +47,9 @@ export default function MobileBottomNav() {
     setDeferredPrompt(null);
   };
 
-  // Do not render bottom nav on customer ordering or login pages
-  if (pathname === '/login' || pathname.startsWith('/order') || pathname.startsWith('/t/')) {
+  // Do not render bottom nav on kitchen KDS, customer ordering, or login pages
+  // Keeps the Kitchen display 100% locked down and secure with no access to billing/admin
+  if (pathname === '/login' || pathname.startsWith('/kitchen') || pathname.startsWith('/order') || pathname.startsWith('/t/')) {
     return null;
   }
 
