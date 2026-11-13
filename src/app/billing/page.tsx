@@ -1157,55 +1157,56 @@ export default function BillingTerminalPage() {
               </pre>
             </div>
 
-            <div className="p-4 border-t border-parchment-200 bg-white space-y-2">
+            <div className="p-4 border-t border-parchment-200 bg-white space-y-2.5">
+              {/* Primary 1-Click Print: 58mm Thermal via Native Browser / System (Works on all Phones, Android, iOS, Windows) */}
               <button
-                onClick={async () => {
-                  try {
-                    const rawItems = printedInvoice?.items || selectedOrder?.items || [];
-                    const items = rawItems.length > 0 ? rawItems.map((i: any) => ({
-                      name: (i.itemNameSnapshot || i.itemName || i.name || 'Food Item').substring(0, 16),
-                      qty: i.quantity || 1,
-                      price: (i.itemPriceSnapshotPaise || i.pricePaise || 0) / 100,
-                      total: (i.lineTotalPaise || 0) / 100,
-                    })) : [
-                      { name: 'Dine-In Order', qty: 1, price: (printedInvoice?.grandTotalPaise || 0) / 100, total: (printedInvoice?.grandTotalPaise || 0) / 100 }
-                    ];
-
-                    await printDirectToBluetoothThermalPrinter({
-                      restaurantName: 'ITHI POORAM',
-                      restaurantLocation: 'Vanchiyoor, Trivandrum',
-                      phone: '+91 471 233 4567',
-                      invoiceNumber: printedInvoice?.invoiceNumber || 'INV-001',
-                      orderCode: printedInvoice?.orderCode || selectedOrder?.customerCode || '#1',
-                      tableCode: printedInvoice?.tableCode || selectedTableCode || 'T1',
-                      items,
-                      grandTotal: (printedInvoice?.grandTotalPaise || selectedOrder?.grandTotalPaise || 0) / 100,
-                      paymentMode: printedInvoice?.paymentMode || paymentMode,
-                      extraLines: 7,
-                    });
-                    alert('Printed successfully to SEZNIK Bluetooth printer!');
-                  } catch (e: any) {
-                    alert('SEZNIK Bluetooth: ' + (e.message || 'Bluetooth connection failed. You can also tap "58mm Thermal Print (USB / System)" below.'));
-                  }
-                }}
-                className="w-full py-3 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center space-x-1.5 shadow-md cursor-pointer"
+                onClick={() => window.print()}
+                className="w-full py-3.5 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center space-x-2 shadow-md cursor-pointer transition-all active:scale-[0.98]"
               >
-                <Printer className="w-4 h-4" />
-                <span>Print to SEZNIK (Bluetooth ESC/POS)</span>
+                <Printer className="w-5 h-5" />
+                <span>🖨️ Print 58mm Thermal Bill</span>
               </button>
 
               <div className="flex space-x-2">
                 <button
-                  onClick={() => window.print()}
-                  className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-slatepos-900 hover:bg-slatepos-800 text-white flex items-center justify-center space-x-1.5 shadow-md cursor-pointer"
+                  onClick={async () => {
+                    try {
+                      const rawItems = printedInvoice?.items || selectedOrder?.items || [];
+                      const items = rawItems.length > 0 ? rawItems.map((i: any) => ({
+                        name: (i.itemNameSnapshot || i.itemName || i.name || 'Food Item').substring(0, 16),
+                        qty: i.quantity || 1,
+                        price: (i.itemPriceSnapshotPaise || i.pricePaise || 0) / 100,
+                        total: (i.lineTotalPaise || 0) / 100,
+                      })) : [
+                        { name: 'Dine-In Order', qty: 1, price: (printedInvoice?.grandTotalPaise || 0) / 100, total: (printedInvoice?.grandTotalPaise || 0) / 100 }
+                      ];
+
+                      await printDirectToBluetoothThermalPrinter({
+                        restaurantName: 'ITHI POORAM',
+                        restaurantLocation: 'Vanchiyoor, Trivandrum',
+                        phone: '+91 471 233 4567',
+                        invoiceNumber: printedInvoice?.invoiceNumber || 'INV-001',
+                        orderCode: printedInvoice?.orderCode || selectedOrder?.customerCode || '#1',
+                        tableCode: printedInvoice?.tableCode || selectedTableCode || 'T1',
+                        items,
+                        grandTotal: (printedInvoice?.grandTotalPaise || selectedOrder?.grandTotalPaise || 0) / 100,
+                        paymentMode: printedInvoice?.paymentMode || paymentMode,
+                        extraLines: 7,
+                      });
+                      alert('Printed successfully to SEZNIK Bluetooth printer!');
+                    } catch (e: any) {
+                      alert('Bluetooth: ' + (e.message || 'Direct Bluetooth failed. Please use the green Print 58mm Thermal Bill button above.'));
+                    }
+                  }}
+                  className="flex-1 py-2.5 rounded-xl text-xs font-semibold bg-slatepos-800 hover:bg-slatepos-700 text-slatepos-200 flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer"
                 >
-                  <Printer className="w-4 h-4" />
-                  <span>58mm Thermal Print (USB / System)</span>
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Direct Bluetooth (ESC/POS)</span>
                 </button>
 
                 <button
                   onClick={() => setIsReprintModalOpen(true)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-bold bg-parchment-100 hover:bg-parchment-200 text-slatepos-700 cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl text-xs font-semibold bg-parchment-200 hover:bg-parchment-300 text-slatepos-800 cursor-pointer"
                 >
                   Reprint Copy
                 </button>
