@@ -31,16 +31,15 @@ export default function MenuItemsPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Add Menu Item Modal State (Pixel-perfect copy of uploaded reference)
+  // Add Menu Item Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [itemName, setItemName] = useState('');
   const [itemMalayalamName, setItemMalayalamName] = useState('');
   const [itemCategory, setItemCategory] = useState('');
   const [isFavourite, setIsFavourite] = useState(false);
   const [salePrice, setSalePrice] = useState('');
-  const [taxPercentage, setTaxPercentage] = useState('Select Tax %');
   const [currentStock, setCurrentStock] = useState('30');
-  const [isWithoutTax, setIsWithoutTax] = useState(true);
+  const [itemImageUrl, setItemImageUrl] = useState('');
 
   // Quick edit modal
   const [editDish, setEditDish] = useState<any | null>(null);
@@ -194,6 +193,7 @@ export default function MenuItemsPage() {
           category: newDish.category,
           pricePaise: newDish.pricePaise,
           currentStock: newDish.quantity,
+          image: itemImageUrl || '',
           station: 'Main Kitchen',
         }),
       });
@@ -220,6 +220,7 @@ export default function MenuItemsPage() {
       setItemMalayalamName('');
       setSalePrice('');
       setCurrentStock('30');
+      setItemImageUrl('');
       if (!keepOpen) {
         setIsAddModalOpen(false);
       }
@@ -410,13 +411,6 @@ export default function MenuItemsPage() {
             className="h-9 w-auto object-contain invert brightness-200"
           />
         </div>
-        <button
-          onClick={() => setIsAddModalOpen(true)}
-          className="px-3.5 py-1.5 rounded-xl bg-[#DC2626] text-white font-black text-xs flex items-center space-x-1"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Add Item</span>
-        </button>
       </header>
 
       {/* Mobile Drawer */}
@@ -573,8 +567,12 @@ export default function MenuItemsPage() {
                           </td>
                           <td className="py-3.5 px-4">
                             <div className="flex items-center space-x-3">
-                              <div className="w-10 h-10 rounded-xl bg-zinc-100 border border-zinc-200 flex items-center justify-center font-bold text-xs text-zinc-600 shrink-0">
-                                {dish.name.slice(0, 2).toUpperCase()}
+                              <div className="w-10 h-10 rounded-xl bg-zinc-100 border border-zinc-200 flex items-center justify-center font-bold text-xs text-zinc-600 shrink-0 overflow-hidden">
+                                {dish.image ? (
+                                  <img src={dish.image} alt={dish.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  dish.name.slice(0, 2).toUpperCase()
+                                )}
                               </div>
                               <div>
                                 <div className="font-extrabold text-black text-sm">{dish.name}</div>
@@ -589,8 +587,25 @@ export default function MenuItemsPage() {
                           <td className="py-3.5 px-4 font-mono font-extrabold text-black text-sm">
                             ₹{((dish.pricePaise || 0) / 100).toFixed(0)}
                           </td>
-                          <td className="py-3.5 px-4 font-mono font-bold text-zinc-600">
-                            {dish.quantity || 39}
+                          <td className="py-3.5 px-4">
+                            {(() => {
+                              const stockVal = dish.currentStock !== undefined && dish.currentStock !== null 
+                                ? dish.currentStock 
+                                : (dish.quantity !== undefined ? dish.quantity : 30);
+                              const isSoldOut = stockVal <= 0 || dish.isAvailable === false;
+                              const isLow = stockVal > 0 && stockVal <= 5;
+                              return (
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-mono font-bold ${
+                                  isSoldOut 
+                                    ? 'bg-red-100 text-red-700' 
+                                    : isLow 
+                                    ? 'bg-amber-100 text-amber-800' 
+                                    : 'bg-emerald-50 text-emerald-800'
+                                }`}>
+                                  {isSoldOut ? '0 (Sold Out)' : `${stockVal} in stock`}
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td className="py-3.5 px-4 text-right">
                             <div className="inline-flex items-center space-x-2">
@@ -598,9 +613,12 @@ export default function MenuItemsPage() {
                                 onClick={() => {
                                   setEditDish(dish);
                                   setEditPrice(((dish.pricePaise || 0) / 100).toString());
-                                  setEditStock((dish.quantity || 39).toString());
+                                  const stockVal = dish.currentStock !== undefined && dish.currentStock !== null 
+                                    ? dish.currentStock 
+                                    : (dish.quantity !== undefined ? dish.quantity : 30);
+                                  setEditStock(String(stockVal));
                                 }}
-                                className="p-1.5 rounded-lg text-zinc-400 hover:text-black hover:bg-zinc-100 transition"
+                                className="p-1.5 rounded-lg text-zinc-400 hover:text-black hover:bg-zinc-100 transition cursor-pointer"
                                 title="Edit Price & Stock"
                               >
                                 <Edit3 className="w-3.5 h-3.5" />
@@ -703,107 +721,116 @@ export default function MenuItemsPage() {
                 </label>
               </div>
 
-              {/* Row 2: Sale Price, Tax Percentage, Current Stock */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Row 2: Sale Price (Tax Inclusive) & Opening Available Stock */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Sale Price */}
                 <div>
                   <label className="block text-zinc-800 font-extrabold mb-1">
-                    Sale Price (₹)
+                    Sale Price (₹) <span className="text-zinc-500 font-normal text-[11px]">[Price Including Tax]</span>
                   </label>
-                  <div className="flex items-center rounded-xl border border-zinc-300 overflow-hidden focus-within:border-blue-500">
+                  <div className="flex items-center rounded-xl border border-zinc-300 overflow-hidden focus-within:border-black bg-white">
+                    <span className="px-3 text-zinc-600 font-bold">₹</span>
                     <input
                       type="number"
                       value={salePrice}
                       onChange={(e) => setSalePrice(e.target.value)}
-                      placeholder="e.g. 25"
-                      className="flex-1 px-3 py-2 text-xs font-bold text-black outline-none font-mono"
+                      placeholder="e.g. 150"
+                      className="flex-1 px-2 py-2.5 text-xs font-bold text-black outline-none font-mono"
                     />
-                    <div className="px-2.5 py-2 bg-zinc-50 border-l border-zinc-200 text-blue-600 font-bold text-[11px] flex items-center space-x-1">
-                      <span>Without Tax</span>
-                    </div>
                   </div>
                 </div>
 
-                {/* Tax Percentage */}
+                {/* Opening Available Stock */}
                 <div>
                   <label className="block text-zinc-800 font-extrabold mb-1">
-                    Tax Percentage
-                  </label>
-                  <div className="relative">
-                    <select
-                      value={taxPercentage}
-                      onChange={(e) => setTaxPercentage(e.target.value)}
-                      className="appearance-none w-full px-3 py-2 rounded-xl border border-zinc-300 text-xs font-bold text-zinc-700 outline-none bg-white cursor-pointer pr-8"
-                    >
-                      <option value="Select Tax %">Select Tax %</option>
-                      <option value="0%">0% (Exempted)</option>
-                      <option value="5%">5% (GST)</option>
-                      <option value="12%">12%</option>
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-blue-500">
-                      <ChevronDown className="w-4 h-4" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Current Stock */}
-                <div>
-                  <label className="block text-zinc-800 font-extrabold mb-1">
-                    Current Stock
+                    Today&apos;s Opening Stock <span className="text-zinc-500 font-normal text-[11px]">[Available Quantity]</span>
                   </label>
                   <input
                     type="number"
                     value={currentStock}
                     onChange={(e) => setCurrentStock(e.target.value)}
                     placeholder="e.g. 30"
-                    className="w-full px-3 py-2 rounded-xl border border-zinc-300 text-xs font-bold text-black outline-none focus:border-blue-500 font-mono"
+                    className="w-full px-3 py-2.5 rounded-xl border border-zinc-300 text-xs font-bold text-black outline-none focus:border-black font-mono"
                   />
                 </div>
               </div>
 
-              {/* Kerala Cuisine Quick Presets & AI Image Box */}
+              {/* Dish Photo Search & Image Selector */}
               <div>
                 <label className="block text-zinc-800 font-extrabold mb-1">
-                  Item Image / വിഭവത്തിന്റെ ചിത്രം
+                  Dish Photo / വിഭവത്തിന്റെ ചിത്രം
                 </label>
-                <div className="border border-dashed border-blue-400 rounded-2xl p-4 sm:p-5 flex flex-col items-center justify-center text-center space-y-2.5 bg-blue-50/20">
-                  <p className="text-zinc-600 text-xs font-bold">
-                    Quick Kerala Preset Photos (1-Tap):
-                  </p>
-                  <div className="flex flex-wrap gap-1.5 justify-center">
-                    {['Porotta', 'Fish Fry', 'Appam', 'Biryani', 'Meals', 'Chai'].map((preset) => (
-                      <button
-                        key={preset}
-                        type="button"
-                        onClick={() => {
-                          if (!itemName) setItemName(preset);
-                          alert(`✓ Selected photo preset for ${preset}!`);
-                        }}
-                        className="px-2.5 py-1 rounded-lg bg-white border border-zinc-200 hover:border-black text-[11px] font-extrabold text-zinc-800 transition cursor-pointer"
-                      >
-                        {preset}
-                      </button>
-                    ))}
-                  </div>
-
-                  <p className="text-zinc-400 text-[11px] pt-1">
-                    Or upload camera photo from phone storage or generate via AI.
-                  </p>
-                  <div className="flex items-center space-x-2 pt-1">
-                    <label className="px-3.5 py-1.5 rounded-xl border border-zinc-300 bg-white text-zinc-800 font-bold text-xs hover:border-black transition cursor-pointer flex items-center space-x-1.5 shadow-xs">
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>Phone Gallery / Camera</span>
-                      <input type="file" accept="image/*" className="hidden" />
-                    </label>
+                <div className="border border-zinc-200 rounded-2xl p-3.5 space-y-3 bg-zinc-50/70">
+                  
+                  {/* Google Image Search Button */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-3 bg-white rounded-xl border border-zinc-200">
+                    <div>
+                      <p className="text-xs font-bold text-black">Find photo for &quot;{itemName || 'your dish'}&quot;</p>
+                      <p className="text-[11px] text-zinc-500">Opens Google Images in a new tab. Copy any image address and paste below.</p>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => alert(`AI image generation queued for "${itemName || 'Kerala Dish'}"`)}
-                      className="px-3.5 py-1.5 rounded-xl border border-blue-500 bg-white text-blue-600 font-bold text-xs hover:bg-blue-50 transition flex items-center space-x-1.5 shadow-xs cursor-pointer"
+                      onClick={() => {
+                        const query = (itemName ? `${itemName} Kerala food restaurant` : 'Kerala traditional food').trim();
+                        window.open(`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}`, '_blank');
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center space-x-1.5 shadow-xs shrink-0 cursor-pointer active:scale-95"
                     >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>AI Generate</span>
+                      <span>🔍 Search on Google</span>
                     </button>
                   </div>
+
+                  {/* Image URL input with Live Preview */}
+                  <div>
+                    <label className="block text-zinc-700 font-bold text-[11px] mb-1">
+                      Image URL (Paste link from Google or anywhere):
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        value={itemImageUrl}
+                        onChange={(e) => setItemImageUrl(e.target.value)}
+                        placeholder="https://... (or choose a preset below)"
+                        className="flex-1 px-3 py-2 rounded-xl border border-zinc-300 text-xs font-medium text-black outline-none focus:border-black"
+                      />
+                      {itemImageUrl && (
+                        <div className="w-10 h-10 rounded-xl overflow-hidden border border-zinc-300 shrink-0 bg-white">
+                          <img src={itemImageUrl} alt="Preview" className="w-full h-full object-cover" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 1-Tap Kerala Photo Presets */}
+                  <div>
+                    <p className="text-zinc-600 text-[11px] font-bold mb-1.5">Or 1-Tap Kerala Photo Presets:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { name: 'Porotta', img: '/sections/billing-pos.jpg' },
+                        { name: 'Fish Fry', img: '/sadhya-bg.jpg' },
+                        { name: 'Sadhya Meals', img: '/sadhya-dark-bg.jpg' },
+                        { name: 'Chicken / Beef', img: '/sections/menu-stock.jpg' },
+                        { name: 'Chai / Coffee', img: '/sections/admin-analytics.jpg' },
+                      ].map((preset) => (
+                        <button
+                          key={preset.name}
+                          type="button"
+                          onClick={() => {
+                            setItemImageUrl(preset.img);
+                            if (!itemName) setItemName(preset.name);
+                          }}
+                          className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition cursor-pointer ${
+                            itemImageUrl === preset.img
+                              ? 'bg-black text-white border-black'
+                              : 'bg-white border-zinc-200 hover:border-black text-zinc-800'
+                          }`}
+                        >
+                          {preset.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                 </div>
               </div>
 

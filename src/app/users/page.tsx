@@ -387,20 +387,24 @@ export default function MorePage() {
   const handleDownloadSingleReport = async (reportType: string, isoDate: string, filename: string) => {
     try {
       await downloadReportAsPdf(reportType, isoDate, filename);
+      alert(`✓ Report Downloaded!\nSaved to: ${phoneStoragePath}${filename}`);
     } catch (e) {
       console.warn('PDF generation fallback to Excel:', e);
       const link = document.createElement('a');
       link.href = `/api/admin/daily-reports?format=excel&report=${reportType}&date=${isoDate}`;
-      link.download = filename.replace('.pdf', '.xls');
+      const xlsName = filename.replace('.pdf', '.xls');
+      link.download = xlsName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      alert(`✓ Report Downloaded!\nSaved to: ${phoneStoragePath}${xlsName}`);
     }
   };
 
   const [activeReportSubTab, setActiveReportSubTab] = useState<'sales' | 'menu' | 'tables' | 'staff' | 'billing'>('sales');
   const [dailyReports, setDailyReports] = useState<any | null>(null);
   const [loadingDailyReports, setLoadingDailyReports] = useState(false);
+  const [dayCloseLoading, setDayCloseLoading] = useState(false);
 
   const fetchDailyReports = async () => {
     try {
@@ -423,14 +427,64 @@ export default function MorePage() {
     }
   }, [activeTab]);
 
+  const handleCloseDay = async () => {
+    const confirmClose = window.confirm(
+      'Are you sure you want to CLOSE the business day?\n\nThis will:\n1. Settle and calculate today\'s closing revenue\n2. Reset active tables for tomorrow\n3. Download the official Daily Z-Report\n4. Automatically save to your selected storage path:\n' + phoneStoragePath
+    );
+    if (!confirmClose) return;
+
+    try {
+      setDayCloseLoading(true);
+      const res = await fetch('/api/admin/day-close', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to close day');
+      }
+
+      const today = new Date().toISOString().slice(0, 10);
+      const filename = data.summary?.excelFileName || `Daily_Report_${today}.xls`;
+
+      if (data.summary?.excelContent) {
+        const blob = new Blob([data.summary.excelContent], { type: 'application/vnd.ms-excel;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else {
+        const link = document.createElement('a');
+        link.href = `/api/admin/daily-reports?format=excel&date=${today}`;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+
+      alert(`✓ Day Successfully Closed!\n\nOfficial Z-Report downloaded and archived to:\n${phoneStoragePath}${filename}`);
+      fetchDailyReports();
+    } catch (err: any) {
+      alert(`Error closing day: ${err.message}`);
+    } finally {
+      setDayCloseLoading(false);
+    }
+  };
+
   const handleDownloadFullDailyWorkbook = () => {
     const today = new Date().toISOString().slice(0, 10);
+    const filename = `IthiPooram_Daily_Reports_${today}.xls`;
     const link = document.createElement('a');
     link.href = `/api/admin/daily-reports?format=excel&date=${today}`;
-    link.download = `IthiPooram_Daily_Reports_${today}.xls`;
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    alert(`✓ Daily Master Report Downloaded!\nSaved to: ${phoneStoragePath}${filename}`);
   };
 
   useEffect(() => {
@@ -1305,11 +1359,36 @@ export default function MorePage() {
               <div className="max-w-4xl space-y-4">
                 <div className="bg-white rounded-3xl p-5 sm:p-6 border border-zinc-200 shadow-xs space-y-4">
                   
-                  {/* Clean Heading - no subheading, no export 5-in-1 button */}
-                  <div className="pb-3 border-b border-zinc-100">
-                    <h3 className="text-base sm:text-lg font-black text-black">
-                      Daily Business Audits &amp; Compliance Reports
-                    </h3>
+                  {/* Clean Heading & Storage Destination Indicator */}
+                  <div className="pb-3 border-b border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-base sm:text-lg font-black text-black">
+                        Daily Business Audits &amp; Compliance Reports
+                      </h3>
+                      <p className="text-[11px] font-semibold text-zinc-500 mt-0.5 flex items-center space-x-1">
+                        <HardDrive className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                        <span className="truncate">Auto-download path: <strong className="text-zinc-800 font-mono">{phoneStoragePath}</strong></span>
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={dayCloseLoading}
+                      onClick={handleCloseDay}
+                      className="inline-flex items-center justify-center space-x-2 px-4 py-2.5 rounded-2xl bg-zinc-900 hover:bg-black text-white font-black text-xs transition shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
+                    >
+                      {dayCloseLoading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Closing Day...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          <span>🌙 Close Day &amp; Download Z-Report</span>
+                        </>
+                      )}
+                    </button>
                   </div>
 
                   {/* 5 Reports One by One Down to One Another */}

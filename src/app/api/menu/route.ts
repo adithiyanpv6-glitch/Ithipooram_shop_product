@@ -128,7 +128,14 @@ export async function PATCH(request: Request) {
       const it = cat.items.find((item) => item.id === itemId);
       if (it) {
         if (typeof isAvailable === 'boolean') it.isAvailable = isAvailable;
-        if (currentStock !== undefined) it.currentStock = currentStock;
+        if (currentStock !== undefined) {
+          it.currentStock = currentStock !== null && currentStock !== '' ? Number(currentStock) : null;
+          if (it.currentStock === 0) {
+            it.isAvailable = false;
+          } else if (typeof it.currentStock === 'number' && it.currentStock > 0 && typeof isAvailable !== 'boolean') {
+            it.isAvailable = true;
+          }
+        }
         if (pricePaise !== undefined) it.pricePaise = pricePaise;
         updatedItem = it;
         break;

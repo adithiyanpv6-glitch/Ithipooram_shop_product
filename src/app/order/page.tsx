@@ -349,10 +349,14 @@ function CustomerOrderingContent() {
 
   // Cart operations
   const addToCart = (item: MenuItem) => {
-    if (!item.isAvailable) return;
+    if (!item.isAvailable || (typeof item.currentStock === 'number' && item.currentStock <= 0)) return;
     setCart((prev) => {
       const idx = prev.findIndex((c) => c.item.id === item.id);
       if (idx >= 0) {
+        if (typeof item.currentStock === 'number' && prev[idx].qty >= item.currentStock) {
+          alert(`Only ${item.currentStock} portions of ${item.name} available today!`);
+          return prev;
+        }
         const next = [...prev];
         next[idx].qty += 1;
         return next;
@@ -896,43 +900,56 @@ function CustomerOrderingContent() {
                         )}
                       </div>
 
-                      {/* Add to Cart Actions */}
-                      {item.isAvailable ? (
-                        inCart ? (
-                          <div className="flex items-center space-x-2 bg-stone-100 rounded-xl p-1">
-                            <button
-                              onClick={() => removeFromCart(item.id)}
-                              className="w-7 h-7 rounded-lg bg-white text-stone-900 font-bold flex items-center justify-center shadow-xs active:scale-95"
-                            >
-                              <Minus className="w-3.5 h-3.5" />
-                            </button>
-                            <span className="font-mono font-bold text-xs px-2 text-stone-950">
-                              {inCart.qty}
+                      {/* Add to Cart Actions with Real-Time Stock Status */}
+                      {(() => {
+                        const isSoldOut = !item.isAvailable || (typeof item.currentStock === 'number' && item.currentStock <= 0);
+                        const isLowStock = !isSoldOut && typeof item.currentStock === 'number' && item.currentStock <= 5;
+
+                        if (isSoldOut) {
+                          return (
+                            <span className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-stone-200 text-stone-500 cursor-not-allowed select-none">
+                              Sold Out
                             </span>
-                            <button
-                              onClick={() => addToCart(item)}
-                              className="w-7 h-7 rounded-lg bg-white text-stone-900 font-bold flex items-center justify-center shadow-xs active:scale-95"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
+                          );
+                        }
+
+                        return (
+                          <div className="flex items-center space-x-2">
+                            {isLowStock && (
+                              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 shrink-0">
+                                Only {item.currentStock} left!
+                              </span>
+                            )}
+                            {inCart ? (
+                              <div className="flex items-center space-x-2 bg-stone-100 rounded-xl p-1">
+                                <button
+                                  onClick={() => removeFromCart(item.id)}
+                                  className="w-7 h-7 rounded-lg bg-white text-stone-900 font-bold flex items-center justify-center shadow-xs active:scale-95 cursor-pointer"
+                                >
+                                  <Minus className="w-3.5 h-3.5" />
+                                </button>
+                                <span className="font-mono font-bold text-xs px-2 text-stone-950">
+                                  {inCart.qty}
+                                </span>
+                                <button
+                                  onClick={() => addToCart(item)}
+                                  className="w-7 h-7 rounded-lg bg-white text-stone-900 font-bold flex items-center justify-center shadow-xs active:scale-95 cursor-pointer"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => addToCart(item)}
+                                className="px-4 py-2 rounded-xl text-xs font-bold bg-[#9E341D] hover:bg-[#832B18] text-white shadow-xs flex items-center space-x-1.5 active:scale-95 transition cursor-pointer"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>{activeExistingOrder ? 'Add to Order' : 'Add'}</span>
+                              </button>
+                            )}
                           </div>
-                        ) : (
-                          <button
-                            onClick={() => addToCart(item)}
-                            className="px-4 py-2 rounded-xl text-xs font-bold bg-[#9E341D] hover:bg-[#832B18] text-white shadow-xs flex items-center space-x-1.5 active:scale-95 transition"
-                          >
-                            <Plus className="w-3.5 h-3.5" />
-                            <span>{activeExistingOrder ? 'Add to Order' : 'Add'}</span>
-                          </button>
-                        )
-                      ) : (
-                        <button
-                          disabled
-                          className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-stone-200 text-stone-400 cursor-not-allowed"
-                        >
-                          Sold Out
-                        </button>
-                      )}
+                        );
+                      })()}
                     </div>
                   </div>
                 );

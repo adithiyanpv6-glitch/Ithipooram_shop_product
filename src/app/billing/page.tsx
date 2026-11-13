@@ -41,19 +41,45 @@ interface TableSummary {
 export default function BillingTerminalPage() {
   const router = useRouter();
 
-  const handleBack = () => {
-    if (typeof window !== 'undefined' && window.history.length > 1) {
-      router.back();
-    } else {
-      router.push('/');
-    }
-  };
   const [mobileTab, setMobileTab] = useState<'tables' | 'orders' | 'checkout'>('tables');
   const [tables, setTables] = useState<TableSummary[]>([]);
   const [selectedTableCode, setSelectedTableCode] = useState<string>('');
   const [unpaidOrders, setUnpaidOrders] = useState<any[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [billPreview, setBillPreview] = useState<any | null>(null);
+
+  // Synced Hierarchical Back Navigation: Checkout -> Orders -> Tables -> Home
+  const handleBack = () => {
+    if (mobileTab === 'checkout') {
+      setMobileTab('orders');
+      return;
+    }
+    if (mobileTab === 'orders') {
+      setMobileTab('tables');
+      setSelectedTableCode('');
+      return;
+    }
+    router.push('/');
+  };
+
+  // Sync with Android hardware back-button and iOS edge swipe
+  useEffect(() => {
+    const handlePop = () => {
+      if (mobileTab === 'checkout') {
+        setMobileTab('orders');
+        window.history.pushState(null, '');
+      } else if (mobileTab === 'orders') {
+        setMobileTab('tables');
+        setSelectedTableCode('');
+        window.history.pushState(null, '');
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.history.pushState(null, '');
+      window.addEventListener('popstate', handlePop);
+      return () => window.removeEventListener('popstate', handlePop);
+    }
+  }, [mobileTab]);
 
   const [cashier, setCashier] = useState<any>(null);
   const [loadingTables, setLoadingTables] = useState(true);

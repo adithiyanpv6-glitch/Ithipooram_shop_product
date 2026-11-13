@@ -37,6 +37,46 @@ export async function GET(request: Request) {
   return NextResponse.json(result, { headers: corsHeaders });
 }
 
+// Helper to automatically reduce real-time stock when items are purchased
+function reduceItemStock(itemId: string, itemName: string, qty: number) {
+  if (!db.menuCategories) return;
+  for (const cat of db.menuCategories) {
+    if (!cat.items) continue;
+    for (const it of cat.items) {
+      const matchId = it.id && it.id === itemId;
+      const matchName = it.name && it.name.trim().toLowerCase() === (itemName || '').trim().toLowerCase();
+      if (matchId || matchName) {
+        if (typeof it.currentStock === 'number') {
+          it.currentStock = Math.max(0, it.currentStock - qty);
+          if (it.currentStock === 0) {
+            it.isAvailable = false; // Auto mark out of stock when reaches 0!
+          }
+        }
+        return;
+      }
+    }
+  }
+}
+
+// Helper to restore stock if an order is rejected/cancelled
+function restoreItemStock(itemId: string, itemName: string, qty: number) {
+  if (!db.menuCategories) return;
+  for (const cat of db.menuCategories) {
+    if (!cat.items) continue;
+    for (const it of cat.items) {
+      const matchId = it.id && it.id === itemId;
+      const matchName = it.name && it.name.trim().toLowerCase() === (itemName || '').trim().toLowerCase();
+      if (matchId || matchName) {
+        if (typeof it.currentStock === 'number') {
+          it.currentStock += qty;
+          it.isAvailable = true;
+        }
+        return;
+      }
+    }
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -140,6 +180,11 @@ export async function POST(request: Request) {
         db.kitchenTickets.unshift(ticket);
       }
 
+      // Deduct available stock for each ordered add-on dish
+      for (const it of formattedItems) {
+        reduceItemStock(it.itemId, it.itemName, it.quantity);
+      }
+
       refreshTableSummaries();
       persistDb();
 
@@ -225,6 +270,11 @@ export async function POST(request: Request) {
         })),
       };
       db.kitchenTickets.unshift(ticket);
+    }
+
+    // Deduct available stock for each ordered dish
+    for (const it of formattedItems) {
+      reduceItemStock(it.itemId, it.itemName, it.quantity);
     }
 
     refreshTableSummaries();
@@ -318,6 +368,11 @@ export async function PATCH(request: Request) {
     if (action === 'REJECT') {
       order.fulfillmentStatus = 'CANCELLED';
       order.paymentStatus = 'REFUNDED';
+      // Restore stock when order is rejected/cancelled
+      for (const it of order.items) {
+        restoreItemStock(it.itemId, it.itemName, it.quantity);
+      }
+
       refreshTableSummaries();
       persistDb();
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, StaffLoginSession, StaffActivityLog, generateStaffId } from '@/lib/serverDb';
+import { db, StaffLoginSession, StaffActivityLog, generateStaffId, persistDb } from '@/lib/serverDb';
 import { syncStaffSessionDatabasePinned } from '@/lib/telegramPinnedVault';
 import { pushLiveUpdateToGoogleWorkspace } from '@/lib/googleWorkspaceSync';
 
@@ -162,6 +162,9 @@ export async function POST(req: NextRequest) {
 
     // Live update to Google Workspace (adithiyanpv6@gmail.com)
     pushLiveUpdateToGoogleWorkspace().catch(() => {});
+
+    // Save staff login session and updated login counts to disk immediately
+    persistDb();
 
     return NextResponse.json({
       message: 'Login successful',

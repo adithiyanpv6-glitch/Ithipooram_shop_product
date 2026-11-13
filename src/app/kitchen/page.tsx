@@ -226,24 +226,25 @@ export default function KitchenDisplayPage() {
       <header className="bg-white border-b border-zinc-200 px-4 sm:px-6 py-3.5 sticky top-0 z-30 shadow-xs">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 max-w-7xl mx-auto w-full">
           
-          {/* Left: Heading Starts from Left Perfectly (Dedicated Kitchen Badge - No Exit Links) */}
+          {/* Left: Brand Calligraphy Logo & Kitchen Title (No Live Sync Badge) */}
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shadow-xs shrink-0">
-              <ChefHat className="w-5 h-5" />
+            <div className="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shadow-xs shrink-0">
+              <ChefHat className="w-6 h-6" />
             </div>
 
             <div>
-              <div className="flex items-center space-x-2">
-                <h1 className="text-lg sm:text-xl font-black text-black">
-                  Kitchen Display System (KDS)
-                </h1>
-                <span className="inline-flex items-center space-x-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>Live Sync</span>
+              <div className="flex items-center space-x-2.5">
+                <img 
+                  src="/brand-calligraphy-uploaded.png" 
+                  alt="ഇത്തിപ്പൂരം" 
+                  className="h-7 sm:h-8 w-auto object-contain"
+                />
+                <span className="text-xs sm:text-sm font-black text-black tracking-wide border-l border-zinc-300 pl-2 uppercase">
+                  Kitchen KDS
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-400 font-semibold">
-                Live food preparation queue &amp; order dispatch terminal
+              <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">
+                Food preparation queue &amp; order dispatch terminal
               </p>
             </div>
           </div>
