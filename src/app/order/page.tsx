@@ -1145,9 +1145,9 @@ function CustomerOrderingContent() {
         </main>
       )}
 
-      {/* Floating Bottom Sticky Bar for Mobile Cart */}
+      {/* Floating Bottom Sticky Bar for Mobile Cart (Safe Area Inset for iOS / Android gesture navigation) */}
       {cart.length > 0 && currentView === 'menu' && (
-        <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-stone-200 p-3 shadow-2xl animate-in slide-in-from-bottom duration-200">
+        <div className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-stone-200 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] shadow-2xl animate-in slide-in-from-bottom duration-200">
           <div className="max-w-xl mx-auto flex items-center justify-between">
             <div>
               <div className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">
@@ -1165,7 +1165,7 @@ function CustomerOrderingContent() {
 
             <button
               onClick={() => setIsCartOpen(true)}
-              className="py-3 px-5 rounded-2xl bg-[#9E341D] hover:bg-[#832B18] text-white font-bold text-xs sm:text-sm shadow-md flex items-center space-x-2 active:scale-95 transition"
+              className="py-3 px-5 rounded-2xl bg-[#9E341D] hover:bg-[#832B18] text-white font-bold text-xs sm:text-sm shadow-md flex items-center space-x-2 active:scale-95 transition cursor-pointer"
             >
               <ShoppingBag className="w-4 h-4" />
               <span>{activeExistingOrder ? 'Add to Existing Order' : 'Review & Place Order'}</span>
@@ -1177,7 +1177,7 @@ function CustomerOrderingContent() {
       {/* Cart & Order Review Modal Drawer */}
       {isCartOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl max-h-[85vh] flex flex-col justify-between animate-in slide-in-from-bottom duration-200">
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-6 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] shadow-2xl max-h-[85vh] flex flex-col justify-between animate-in slide-in-from-bottom duration-200">
             <div>
               <div className="flex items-center justify-between pb-3 border-b border-stone-200">
                 <div>

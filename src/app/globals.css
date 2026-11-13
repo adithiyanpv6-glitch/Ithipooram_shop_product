@@ -8,6 +8,34 @@
   }
 }
 
+/* Universal Mobile Screen & Device Optimization (iPhone, Android, Foldables, Tablets) */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 0ms Instant Tap Response on All Mobile Browsers */
+button, a, input, select, textarea {
+  touch-action: manipulation;
+}
+
+/* Prevent iOS Auto-Zoom on Form Input Focus on Screens < 768px */
+@media screen and (max-width: 767px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Safe Area Inset Support for iPhone Notches & Android Gesture Bars */
+.safe-area-bottom {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));
+}
+.safe-area-top {
+  padding-top: max(0.5rem, env(safe-area-inset-top, 0px));
+}
+
 /* Dedicated Print Engine: Intelligently handles 58mm Thermal Slips vs Full A4 PDF Reports */
 @media print {
   @page {

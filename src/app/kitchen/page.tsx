@@ -249,20 +249,21 @@ export default function KitchenDisplayPage() {
           </div>
 
           {/* Right: The 3 Main Options + Station Filter + Speaker Button */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 w-full lg:w-auto">
             
-            {/* Exactly 3 Tab Options: New Orders to Receive, Working Orders, Served Ones */}
-            <div className="inline-flex items-center p-1 bg-zinc-100 rounded-2xl text-xs font-bold text-zinc-600">
+            {/* Exactly 3 Tab Options: Responsive Full-Width Segmented Control on Mobile */}
+            <div className="grid grid-cols-3 sm:flex items-center p-1 bg-zinc-100 rounded-2xl text-xs font-bold text-zinc-600 w-full sm:w-auto">
               <button
                 onClick={() => setActiveTab('new')}
-                className={`px-3.5 py-1.5 rounded-xl transition flex items-center space-x-1.5 cursor-pointer ${
+                className={`px-2 sm:px-3.5 py-2 sm:py-1.5 rounded-xl transition flex items-center justify-center space-x-1 sm:space-x-1.5 cursor-pointer text-center ${
                   activeTab === 'new'
                     ? 'bg-black text-white shadow-xs font-black'
                     : 'hover:text-black'
                 }`}
               >
-                <span>New Orders to Receive</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                <span className="sm:hidden">New</span>
+                <span className="hidden sm:inline">New Orders</span>
+                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${
                   newOrders.length > 0 ? 'bg-amber-400 text-black animate-pulse' : 'bg-zinc-200 text-zinc-700'
                 }`}>
                   {newOrders.length}
@@ -271,71 +272,74 @@ export default function KitchenDisplayPage() {
 
               <button
                 onClick={() => setActiveTab('working')}
-                className={`px-3.5 py-1.5 rounded-xl transition flex items-center space-x-1.5 cursor-pointer ${
+                className={`px-2 sm:px-3.5 py-2 sm:py-1.5 rounded-xl transition flex items-center justify-center space-x-1 sm:space-x-1.5 cursor-pointer text-center ${
                   activeTab === 'working'
                     ? 'bg-black text-white shadow-xs font-black'
                     : 'hover:text-black'
                 }`}
               >
-                <span>Working Orders</span>
-                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-zinc-200 text-zinc-700">
+                <span className="sm:hidden">Cooking</span>
+                <span className="hidden sm:inline">Working Orders</span>
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-zinc-200 text-zinc-700 shrink-0">
                   {workingOrders.length}
                 </span>
               </button>
 
               <button
                 onClick={() => setActiveTab('served')}
-                className={`px-3.5 py-1.5 rounded-xl transition flex items-center space-x-1.5 cursor-pointer ${
+                className={`px-2 sm:px-3.5 py-2 sm:py-1.5 rounded-xl transition flex items-center justify-center space-x-1 sm:space-x-1.5 cursor-pointer text-center ${
                   activeTab === 'served'
                     ? 'bg-black text-white shadow-xs font-black'
                     : 'hover:text-black'
                 }`}
               >
-                <span>Served Ones</span>
-                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-zinc-200 text-zinc-700">
+                <span className="sm:hidden">Served</span>
+                <span className="hidden sm:inline">Served Ones</span>
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-zinc-200 text-zinc-700 shrink-0">
                   {servedOrders.length}
                 </span>
               </button>
             </div>
 
-            {/* Station Dropdown */}
-            <select
-              value={stationFilter}
-              onChange={(e) => setStationFilter(e.target.value)}
-              className="text-xs font-bold bg-zinc-100 border border-zinc-200 rounded-xl px-2.5 py-1.5 text-black outline-none focus:border-black"
-            >
-              <option value="ALL">All Stations</option>
-              <option value="MAIN_KITCHEN">Meals &amp; Curry</option>
-              <option value="SEAFOOD_FRY">Tawa &amp; Fry</option>
-              <option value="BEVERAGE_COUNTER">Beverages</option>
-            </select>
+            {/* Mobile-Optimized Controls: Station Filter + Auto-Speaker + Refresh */}
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <select
+                value={stationFilter}
+                onChange={(e) => setStationFilter(e.target.value)}
+                className="flex-1 sm:flex-initial text-xs font-bold bg-zinc-100 border border-zinc-200 rounded-xl px-2.5 py-2 sm:py-1.5 text-black outline-none focus:border-black min-w-0"
+              >
+                <option value="ALL">All Stations</option>
+                <option value="MAIN_KITCHEN">Meals &amp; Curry</option>
+                <option value="SEAFOOD_FRY">Tawa &amp; Fry</option>
+                <option value="BEVERAGE_COUNTER">Beverages</option>
+              </select>
 
-            {/* Automatic Speaker Option */}
-            <button
-              onClick={() => {
-                const next = !speakerEnabled;
-                setSpeakerEnabled(next);
-                if (next) speakNewOrder();
-              }}
-              className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center space-x-1.5 transition cursor-pointer ${
-                speakerEnabled
-                  ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
-                  : 'bg-zinc-100 border-zinc-200 text-zinc-400'
-              }`}
-              title={speakerEnabled ? 'Auto-Speaker is ACTIVE (Calls out new orders)' : 'Speaker is MUTED'}
-            >
-              {speakerEnabled ? <Volume2 className="w-3.5 h-3.5 text-emerald-600 animate-pulse" /> : <VolumeX className="w-3.5 h-3.5" />}
-              <span>{speakerEnabled ? 'Speaker: Auto Call' : 'Speaker: Off'}</span>
-            </button>
+              <button
+                onClick={() => {
+                  const next = !speakerEnabled;
+                  setSpeakerEnabled(next);
+                  if (next) speakNewOrder();
+                }}
+                className={`flex-1 sm:flex-initial px-2.5 py-2 sm:py-1.5 rounded-xl border text-xs font-bold flex items-center justify-center space-x-1.5 transition cursor-pointer shrink-0 ${
+                  speakerEnabled
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                    : 'bg-zinc-100 border-zinc-200 text-zinc-400'
+                }`}
+                title={speakerEnabled ? 'Auto-Speaker is ACTIVE (Calls out new orders)' : 'Speaker is MUTED'}
+              >
+                {speakerEnabled ? <Volume2 className="w-3.5 h-3.5 text-emerald-600 animate-pulse" /> : <VolumeX className="w-3.5 h-3.5" />}
+                <span className="truncate">{speakerEnabled ? 'Speaker: On' : 'Speaker: Off'}</span>
+              </button>
 
-            {/* Refresh Button */}
-            <button
-              onClick={fetchTickets}
-              className="p-1.5 rounded-xl border border-zinc-200 hover:border-black text-zinc-600 transition cursor-pointer"
-              title="Refresh"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
+              <button
+                onClick={fetchTickets}
+                className="p-2 sm:p-1.5 rounded-xl border border-zinc-200 hover:border-black text-zinc-600 transition cursor-pointer shrink-0"
+                title="Refresh"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
           </div>
 
         </div>

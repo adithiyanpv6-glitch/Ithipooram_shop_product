@@ -102,7 +102,7 @@ export default function MobileBottomNav() {
       {/* Persistent Bottom Mobile Navigation Bar for Smartphones & Tablets */}
       <nav 
         aria-label="Mobile Bottom Navigation"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0C0E12]/95 backdrop-blur-lg border-t border-zinc-800/90 px-1 py-1 flex items-center justify-around select-none shadow-2xl no-print"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0C0E12]/95 backdrop-blur-lg border-t border-zinc-800/90 px-0.5 pt-1 pb-[max(0.35rem,env(safe-area-inset-bottom,0px))] flex items-center justify-between select-none shadow-2xl no-print"
       >
         {navItems.map((item) => {
           const Icon = item.icon;
@@ -111,19 +111,19 @@ export default function MobileBottomNav() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all duration-150 min-w-[50px] relative ${
+              className={`flex-1 min-w-0 flex flex-col items-center justify-center py-1 px-1 rounded-xl transition-all duration-150 relative ${
                 active 
                   ? 'text-white font-black scale-105' 
                   : 'text-zinc-500 hover:text-zinc-300 font-semibold'
               }`}
             >
               <div className={`p-1 rounded-xl transition relative ${active ? 'bg-white text-black shadow-md' : 'bg-transparent'}`}>
-                <Icon className="w-4 h-4" />
+                <Icon className="w-4 h-4 shrink-0" />
                 {item.badge && (
                   <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-orange-500 animate-ping" />
                 )}
               </div>
-              <span className={`text-[10px] mt-0.5 tracking-tight ${active ? 'text-white font-extrabold' : 'text-zinc-400'}`}>
+              <span className={`text-[9px] xs:text-[10px] mt-0.5 tracking-tight truncate max-w-full text-center ${active ? 'text-white font-extrabold' : 'text-zinc-400'}`}>
                 {item.label}
               </span>
             </Link>

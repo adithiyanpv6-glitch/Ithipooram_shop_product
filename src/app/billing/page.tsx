@@ -472,28 +472,24 @@ export default function BillingTerminalPage() {
 
   return (
     <div className="min-h-screen bg-parchment-50 flex flex-col font-sans">
-      {/* Top POS Header - Single Line Centered */}
-      <header className="bg-slatepos-900 border-b border-slatepos-800 text-white px-4 sm:px-6 py-3.5 flex items-center justify-between sticky top-0 z-30 shadow-md">
+      {/* Top POS Header - Responsive for All Mobile Devices */}
+      <header className="bg-slatepos-900 border-b border-slatepos-800 text-white px-3 sm:px-6 py-2.5 sm:py-3.5 flex items-center justify-between sticky top-0 z-30 shadow-md">
         {/* Left: Instant Back Navigation */}
-        <div className="flex items-center w-1/4">
+        <div className="flex items-center space-x-2 shrink-0">
           <button
             onClick={handleBack}
-            className="p-2 rounded-xl bg-slatepos-800 hover:bg-slatepos-700 text-slatepos-300 transition-colors"
+            className="p-2 rounded-xl bg-slatepos-800 hover:bg-slatepos-700 text-slatepos-300 transition-colors cursor-pointer"
             title="Back to Previous Page"
           >
             <ArrowLeft className="w-4 h-4" />
           </button>
-        </div>
-
-        {/* Center: Single Line "Billing Counter" */}
-        <div className="flex items-center justify-center w-2/4 text-center">
-          <h1 className="text-base sm:text-lg font-black tracking-wider text-white uppercase truncate">
-            Billing Counter
+          <h1 className="text-sm sm:text-lg font-black tracking-wider text-white uppercase truncate max-w-[130px] xs:max-w-none">
+            Billing
           </h1>
         </div>
 
         {/* Right: Install App, Bluetooth Printer, Live Pulse & Refresh */}
-        <div className="flex items-center justify-end w-1/4 space-x-1.5 sm:space-x-2">
+        <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
           {/* Install App on Phone Pill */}
           <button
             onClick={handleInstallApp}
@@ -508,7 +504,7 @@ export default function BillingTerminalPage() {
           <button
             onClick={handleConnectPrinter}
             disabled={isConnectingPrinter}
-            className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold transition border cursor-pointer ${
+            className={`flex items-center space-x-1.5 px-2 py-1 rounded-full text-[11px] font-bold transition border cursor-pointer ${
               isPrinterConnected
                 ? 'bg-blue-950/70 border-blue-500/50 text-blue-300'
                 : 'bg-slatepos-800/90 border-slatepos-700 text-slatepos-300 hover:border-amber-400 hover:text-amber-300'
@@ -522,10 +518,6 @@ export default function BillingTerminalPage() {
             </span>
           </button>
 
-          <div className="hidden md:flex items-center space-x-1.5 bg-emerald-950/60 border border-emerald-500/30 px-2.5 py-1 rounded-full">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider">Live</span>
-          </div>
           <button
             onClick={() => {
               loadTables();
@@ -540,10 +532,10 @@ export default function BillingTerminalPage() {
       </header>
 
       {/* Mobile Stepper / Tab Bar for Phone/Tablet Cashiers */}
-      <div className="lg:hidden bg-stone-900 border-b border-stone-800 px-2 py-2 flex items-center justify-between text-xs sticky top-[60px] z-20 shadow-md">
+      <div className="lg:hidden bg-stone-900 border-b border-stone-800 px-1.5 py-1.5 flex items-center justify-between text-xs sticky top-[50px] sm:top-[60px] z-20 shadow-md">
         <button
           onClick={() => setMobileTab('tables')}
-          className={`flex-1 py-2 px-1.5 text-center rounded-lg font-bold transition text-xs truncate ${
+          className={`flex-1 min-w-0 py-2 px-1 text-center rounded-lg font-bold transition text-xs truncate ${
             mobileTab === 'tables'
               ? 'bg-amber-500 text-stone-950 shadow-sm font-black'
               : 'text-stone-300 hover:bg-stone-800'
@@ -551,10 +543,10 @@ export default function BillingTerminalPage() {
         >
           1. Table ({selectedTableCode || '—'})
         </button>
-        <ChevronRight className="w-3.5 h-3.5 text-stone-500 shrink-0 mx-0.5" />
+        <ChevronRight className="w-3 h-3 text-stone-500 shrink-0 mx-0.5" />
         <button
           onClick={() => setMobileTab('orders')}
-          className={`flex-1 py-2 px-1.5 text-center rounded-lg font-bold transition text-xs truncate ${
+          className={`flex-1 min-w-0 py-2 px-1 text-center rounded-lg font-bold transition text-xs truncate ${
             mobileTab === 'orders'
               ? 'bg-amber-500 text-stone-950 shadow-sm font-black'
               : 'text-stone-300 hover:bg-stone-800'
@@ -562,10 +554,10 @@ export default function BillingTerminalPage() {
         >
           2. Orders ({unpaidOrders.length})
         </button>
-        <ChevronRight className="w-3.5 h-3.5 text-stone-500 shrink-0 mx-0.5" />
+        <ChevronRight className="w-3 h-3 text-stone-500 shrink-0 mx-0.5" />
         <button
           onClick={() => setMobileTab('checkout')}
-          className={`flex-1 py-2 px-1.5 text-center rounded-lg font-bold transition text-xs truncate ${
+          className={`flex-1 min-w-0 py-2 px-1 text-center rounded-lg font-bold transition text-xs truncate ${
             mobileTab === 'checkout'
               ? 'bg-amber-500 text-stone-950 shadow-sm font-black'
               : 'text-stone-300 hover:bg-stone-800'
