@@ -1360,8 +1360,8 @@ export default function MorePage() {
                 <div className="bg-white rounded-3xl p-5 sm:p-6 border border-zinc-200 shadow-xs space-y-4">
                   
                   {/* Clean Heading & Storage Destination Indicator */}
-                  <div className="pb-3 border-b border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
+                  <div className="pb-3 border-b border-zinc-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
                       <h3 className="text-base sm:text-lg font-black text-black">
                         Daily Business Audits &amp; Compliance Reports
                       </h3>
@@ -1375,7 +1375,7 @@ export default function MorePage() {
                       type="button"
                       disabled={dayCloseLoading}
                       onClick={handleCloseDay}
-                      className="inline-flex items-center justify-center space-x-2 px-4 py-2.5 rounded-2xl bg-zinc-900 hover:bg-black text-white font-black text-xs transition shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
+                      className="w-full md:w-auto inline-flex items-center justify-center space-x-2 px-4 py-3 rounded-2xl bg-zinc-900 hover:bg-black text-white font-black text-xs transition shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
                     >
                       {dayCloseLoading ? (
                         <>
