@@ -102,14 +102,6 @@ export default function MenuItemsPage() {
       router.replace('/login');
       return;
     }
-    // Clear any legacy cached test menu so fresh app starts clean
-    if (typeof window !== 'undefined') {
-      const cached = localStorage.getItem('ithipooram_menu_categories');
-      if (cached && (cached.includes('Chicken 65') || cached.includes('Kerala Specials') || cached.includes('Idli'))) {
-        localStorage.removeItem('ithipooram_menu_categories');
-        localStorage.removeItem('ithipooram_custom_menu_dishes');
-      }
-    }
     loadMenu();
   }, [router]);
 

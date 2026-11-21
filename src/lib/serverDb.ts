@@ -227,15 +227,6 @@ if (!global.__ITHIPOORAM_DB__) {
     global.__ITHIPOORAM_DB__.loginSessions = [];
     global.__ITHIPOORAM_DB__.staffActivityLogs = [];
   }
-
-  // Clear any legacy/test tables so tables only appear when explicitly added by shop owner
-  if (global.__ITHIPOORAM_DB__.tables?.some((t) => t.id === 't1' || t.tableCode === 'T1A' || t.tableCode === 'T2B' || t.id === 't-t1a-ac' || t.displayName?.includes('Verandah'))) {
-    global.__ITHIPOORAM_DB__.tables = [];
-  }
-  // Clear any legacy/test menu so dishes only appear when explicitly added by admin
-  if (global.__ITHIPOORAM_DB__.menuCategories?.some((c) => c.id === 'cat-1' || c.name === 'Kerala Specials' || c.items?.some((it) => it.id === 'm1' || it.name === 'Idli' || it.name === 'Chicken 65'))) {
-    global.__ITHIPOORAM_DB__.menuCategories = [];
-  }
 }
 
 
@@ -497,11 +488,10 @@ export function loadDbFromDisk() {
       }
       const loaded = JSON.parse(raw);
       if (loaded && Array.isArray(loaded.tables)) {
-        // Strip any legacy/test tables and dishes so shop handover starts 100% clean
-        db.tables = loaded.tables.filter((t: any) => !['T1A', 'T1B', 'T2A', 'T2B'].includes(t.tableCode) && !t.id?.includes('t1a') && !t.displayName?.includes('Verandah'));
-        db.orders = [];
-        db.kitchenTickets = [];
-        db.menuCategories = (loaded.menuCategories || []).filter((c: any) => c.name !== 'Kerala Specials' && !c.items?.some((it: any) => it.name === 'Idli' || it.name === 'Chicken 65'));
+        db.tables = Array.isArray(loaded.tables) ? loaded.tables : [];
+        db.orders = Array.isArray(loaded.orders) ? loaded.orders : [];
+        db.kitchenTickets = Array.isArray(loaded.kitchenTickets) ? loaded.kitchenTickets : [];
+        db.menuCategories = Array.isArray(loaded.menuCategories) ? loaded.menuCategories : [];
         db.masterPin = loaded.masterPin || '8181';
         db.staffUsers = Array.isArray(loaded.staffUsers) ? loaded.staffUsers : [];
         db.loginSessions = [];

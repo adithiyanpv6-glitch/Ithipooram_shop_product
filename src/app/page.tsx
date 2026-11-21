@@ -219,17 +219,6 @@ export default function RootHomePage() {
   };
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedTables = localStorage.getItem('ithipooram_custom_tables');
-      if (savedTables && (savedTables.includes('T1A') || savedTables.includes('t-t1a-ac') || savedTables.includes('AC Room'))) {
-        localStorage.removeItem('ithipooram_custom_tables');
-      }
-      const savedMenu = localStorage.getItem('ithipooram_menu_categories');
-      if (savedMenu && (savedMenu.includes('Chicken 65') || savedMenu.includes('Kerala Specials') || savedMenu.includes('Idli'))) {
-        localStorage.removeItem('ithipooram_menu_categories');
-        localStorage.removeItem('ithipooram_custom_menu_dishes');
-      }
-    }
     loadDashboardData();
     const interval = setInterval(loadDashboardData, 4000);
     return () => clearInterval(interval);

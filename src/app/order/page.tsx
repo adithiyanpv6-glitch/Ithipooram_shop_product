@@ -268,13 +268,6 @@ function CustomerOrderingContent() {
 
   // 3. Fetch Live Menu uploaded/managed by Admin (Real-time live sync)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedMenu = localStorage.getItem('ithipooram_menu_categories');
-      if (savedMenu && (savedMenu.includes('Chicken 65') || savedMenu.includes('Kerala Specials') || savedMenu.includes('Idli'))) {
-        localStorage.removeItem('ithipooram_menu_categories');
-        localStorage.removeItem('ithipooram_custom_menu_dishes');
-      }
-    }
     const fetchLiveMenu = async () => {
       try {
         const endpoint = apiUrl ? `${apiUrl}/api/menu` : '/api/menu';

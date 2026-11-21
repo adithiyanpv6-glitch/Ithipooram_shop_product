@@ -166,12 +166,6 @@ export default function TablesManagementPage() {
       router.replace('/login');
       return;
     }
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('ithipooram_custom_tables');
-      if (saved && (saved.includes('T1A') || saved.includes('t-t1a-ac') || saved.includes('AC Room'))) {
-        localStorage.removeItem('ithipooram_custom_tables');
-      }
-    }
     loadData();
     const interval = setInterval(loadData, 4000);
     return () => clearInterval(interval);
