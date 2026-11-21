@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { 
   ChefHat, 
   Clock, 
@@ -12,7 +13,8 @@ import {
   RefreshCw,
   BellRing,
   Check,
-  Utensils
+  Utensils,
+  ArrowLeft
 } from 'lucide-react';
 
 export interface KitchenTicket {
@@ -33,6 +35,7 @@ export interface KitchenTicket {
 }
 
 export default function KitchenDisplayPage() {
+  const router = useRouter();
   const [tickets, setTickets] = useState<KitchenTicket[]>([]);
   const [speakerEnabled, setSpeakerEnabled] = useState(true);
   const [now, setNow] = useState(Date.now());
@@ -252,8 +255,24 @@ export default function KitchenDisplayPage() {
       <header className="bg-white border-b border-zinc-200 px-4 sm:px-6 py-3.5 sticky top-0 z-30 shadow-xs">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 max-w-7xl mx-auto w-full">
           
-          {/* Left: Brand Calligraphy Logo & Kitchen Title (No Live Sync Badge) */}
+          {/* Left: Back Button, Brand Calligraphy Logo & Kitchen Title */}
           <div className="flex items-center space-x-3">
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.history.length > 1) {
+                  router.back();
+                } else {
+                  router.push('/');
+                }
+              }}
+              className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-black font-extrabold text-xs transition cursor-pointer active:scale-95 shadow-xs"
+              title="Back to Previous Screen"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back</span>
+            </button>
+            <div className="h-6 w-px bg-zinc-200" />
             <div className="w-11 h-11 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-600 shadow-xs shrink-0">
               <ChefHat className="w-6 h-6" />
             </div>

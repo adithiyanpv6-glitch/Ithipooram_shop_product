@@ -19,6 +19,18 @@ $tunnelLogPath = Join-Path $dataDir "cloudflared_tunnel.log"
 $tunnelUrlFile = Join-Path $dataDir "tunnel_url.txt"
 $desktopLinksFile = "C:\Users\USR\Desktop\MOBILE_LINKS_FOR_STAFF.txt"
 
+# Prevent laptop sleep when lid is closed (ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED)
+try {
+    $win32Def = @'
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern uint SetThreadExecutionState(uint esFlags);
+'@
+    $script:powerKeeper = Add-Type -MemberDefinition $win32Def -Name "WatchdogPowerKeeper" -Namespace "IthiPooram" -PassThru -ErrorAction SilentlyContinue
+    if ($script:powerKeeper) {
+        $script:powerKeeper::SetThreadExecutionState([uint32]2147483713) | Out-Null
+    }
+} catch {}
+
 function Write-WatchdogLog([string]$msg, [string]$color = "Cyan") {
     $time = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
     Write-Host "[$time][TUNNEL-WATCHDOG] $msg" -ForegroundColor $color
@@ -139,6 +151,13 @@ $loopCount = 0
 while ($true) {
     Start-Sleep -Seconds 12
     $loopCount++
+
+    # Re-assert execution state so Windows kernel never suspends on lid close
+    try {
+        if ($script:powerKeeper) {
+            $script:powerKeeper::SetThreadExecutionState([uint32]2147483713) | Out-Null
+        }
+    } catch {}
 
     # 1. Check if cloudflared process is running
     $cfProc = Get-Process -Name "cloudflared" -ErrorAction SilentlyContinue

@@ -1043,8 +1043,24 @@ export default function MorePage() {
         {/* ========================================================== */}
         {activeTab === null && (
           <div className="flex-1 flex flex-col w-full">
-            {/* Top Header: Only heading "More Option", no subtitles, no badges */}
-            <div className="px-4 sm:px-6 py-4 sm:py-5 bg-white border-b border-zinc-200 shrink-0">
+            {/* Top Header: Back Button & heading "More Option" */}
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-white border-b border-zinc-200 shrink-0 flex items-center space-x-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== 'undefined' && window.history.length > 1) {
+                    router.back();
+                  } else {
+                    router.push('/');
+                  }
+                }}
+                className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-black font-extrabold text-xs transition cursor-pointer active:scale-95 shadow-xs"
+                title="Back to Previous Screen"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Back</span>
+              </button>
+              <div className="h-6 w-px bg-zinc-200" />
               <h1 className="text-xl sm:text-2xl font-black text-black tracking-tight">More Option</h1>
             </div>
 
@@ -2258,6 +2274,15 @@ export default function MorePage() {
             
             <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
               <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddStaffModalOpen(false)}
+                  className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 text-xs font-bold transition cursor-pointer active:scale-95"
+                  title="Back to Staff List"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Back</span>
+                </button>
                 <Users className="w-5 h-5 text-black" />
                 <div>
                   <h3 className="text-base font-black text-black">Register Staff Member</h3>

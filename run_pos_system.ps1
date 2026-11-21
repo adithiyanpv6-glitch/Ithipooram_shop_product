@@ -19,12 +19,34 @@ Write-Host "====================================================================
 # ------------------------------------------------------------------------
 Write-Host "[1/6] Applying zero-sleep power settings & activating hotspot..." -ForegroundColor Cyan
 try {
-    # 0 = Do Nothing when laptop lid is closed (on AC power)
-    powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS LIDACTION 0 2>$null
-    # 0 = Never sleep on AC power
-    powercfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP STANDBYIDLE 0 2>$null
+    # 0 = Do Nothing when laptop lid is closed (both on AC power and on Battery)
+    powercfg /setacvalueindex SCHEME_CURRENT 4f971e89-eebd-4455-a8de-9e59040e7347 5ca83367-6e45-459f-a27b-476b1d01c936 0 2>$null
+    powercfg /setdcvalueindex SCHEME_CURRENT 4f971e89-eebd-4455-a8de-9e59040e7347 5ca83367-6e45-459f-a27b-476b1d01c936 0 2>$null
+
+    # 0 = Maximum Performance for Wireless Adapter (prevents Wi-Fi sleep when lid is closed)
+    powercfg /setacvalueindex SCHEME_CURRENT 19cbb8fa-5279-450e-9fac-8a3d5fedd0c1 12bbebe6-58d6-4636-95bb-3217ef867c1a 0 2>$null
+    powercfg /setdcvalueindex SCHEME_CURRENT 19cbb8fa-5279-450e-9fac-8a3d5fedd0c1 12bbebe6-58d6-4636-95bb-3217ef867c1a 0 2>$null
+
+    # 0 = Never sleep or hibernate
+    powercfg /change standby-timeout-ac 0 2>$null
+    powercfg /change standby-timeout-dc 0 2>$null
+    powercfg /change hibernate-timeout-ac 0 2>$null
+    powercfg /change hibernate-timeout-dc 0 2>$null
     powercfg /setactive SCHEME_CURRENT 2>$null
-    Write-Host "      -> Windows power configured: Laptop will stay running with lid closed." -ForegroundColor Green
+
+    # Win32 Execution Lock: ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED
+    try {
+        $win32Def = @'
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern uint SetThreadExecutionState(uint esFlags);
+'@
+        $pType = Add-Type -MemberDefinition $win32Def -Name "LidLockWin32" -Namespace "IthiPooram" -PassThru -ErrorAction SilentlyContinue
+        if ($pType) {
+            $pType::SetThreadExecutionState([uint32]2147483713) | Out-Null
+        }
+    } catch {}
+
+    Write-Host "      -> Windows power configured: Laptop & Wi-Fi will stay 100% running with lid closed." -ForegroundColor Green
 
     # Automatically ensure Windows Mobile Hotspot is broadcasting for 100% offline staff phones
     try {

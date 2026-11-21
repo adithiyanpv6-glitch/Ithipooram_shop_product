@@ -20,7 +20,8 @@ import {
   ChevronDown,
   Receipt,
   ChefHat,
-  Trash2
+  Trash2,
+  ArrowLeft
 } from 'lucide-react';
 import { apiRequest, getCurrentUser } from '../../lib/api';
 
@@ -459,9 +460,25 @@ export default function MenuItemsPage() {
       <main className="flex-1 flex flex-col w-full overflow-hidden">
         
         {/* Top Header Bar with Live QR Sync & Red "+ Add Item" Button */}
-        <div className="px-6 py-4 bg-white border-b border-zinc-200 flex items-center justify-between gap-3">
-          <div className="flex items-center space-x-3">
-            <h1 className="text-xl sm:text-2xl font-black text-black">Menu Items</h1>
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-white border-b border-zinc-200 flex items-center justify-between gap-3">
+          <div className="flex items-center space-x-2.5 sm:space-x-3">
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.history.length > 1) {
+                  router.back();
+                } else {
+                  router.push('/');
+                }
+              }}
+              className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-black font-extrabold text-xs transition cursor-pointer active:scale-95 shadow-xs"
+              title="Back to Previous Screen"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back</span>
+            </button>
+            <div className="h-6 w-px bg-zinc-200" />
+            <h1 className="text-lg sm:text-2xl font-black text-black">Menu Items</h1>
             <span className="hidden sm:inline-flex items-center space-x-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span>QR Order Synced</span>
@@ -680,7 +697,18 @@ export default function MenuItemsPage() {
             
             {/* Header */}
             <div className="flex items-center justify-between pb-3.5 border-b border-zinc-100 shrink-0">
-              <h2 className="text-base font-black text-black">Add Menu Item</h2>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 text-xs font-bold transition cursor-pointer active:scale-95"
+                  title="Back to Menu"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Back</span>
+                </button>
+                <h2 className="text-base font-black text-black">Add Menu Item</h2>
+              </div>
               <button 
                 onClick={() => setIsAddModalOpen(false)}
                 className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 hover:text-black flex items-center justify-center transition cursor-pointer"
@@ -821,7 +849,18 @@ export default function MenuItemsPage() {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-zinc-200">
             <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
-              <h3 className="font-black text-black text-base">Edit Dish</h3>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setEditDish(null)}
+                  className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 text-xs font-bold transition cursor-pointer active:scale-95"
+                  title="Back to Menu"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Back</span>
+                </button>
+                <h3 className="font-black text-black text-base">Edit Dish</h3>
+              </div>
               <button onClick={() => setEditDish(null)} className="text-zinc-400 hover:text-black">
                 <X className="w-5 h-5" />
               </button>

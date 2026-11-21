@@ -21,7 +21,8 @@ import {
   ChevronDown,
   ChevronLeft,
   Receipt,
-  Loader2
+  Loader2,
+  ArrowLeft
 } from 'lucide-react';
 import { apiRequest, getCurrentUser } from '../../lib/api';
 import { printDirectToBluetoothThermalPrinter } from '../../lib/thermalPrinter';
@@ -400,8 +401,26 @@ export default function ReportsPage() {
       <main className="flex-1 flex flex-col w-full overflow-hidden">
         
         {/* Top Header with Exact Red PDF and Green XLS download buttons matching uploaded image */}
-        <div className="px-6 py-4 bg-white border-b border-zinc-200 flex items-center justify-between">
-          <h1 className="text-xl sm:text-2xl font-black text-black">Orders Report</h1>
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-white border-b border-zinc-200 flex items-center justify-between">
+          <div className="flex items-center space-x-2.5 sm:space-x-3">
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.history.length > 1) {
+                  router.back();
+                } else {
+                  router.push('/');
+                }
+              }}
+              className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-black font-extrabold text-xs transition cursor-pointer active:scale-95 shadow-xs"
+              title="Back to Previous Screen"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back</span>
+            </button>
+            <div className="h-6 w-px bg-zinc-200" />
+            <h1 className="text-lg sm:text-2xl font-black text-black">Orders Report</h1>
+          </div>
           
           {/* Two live print options: 1. Billing Paper (58mm Thermal Slip) 2. A4 Full Report (PDF) + Excel Download */}
           <div className="flex items-center space-x-2">

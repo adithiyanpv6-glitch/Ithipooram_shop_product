@@ -16,6 +16,7 @@ import {
   UserPlus, 
   ShieldCheck,
   ArrowUpRight, 
+  ArrowLeft,
   LogOut, 
   Menu as MenuIcon,
   X,
@@ -1305,7 +1306,18 @@ export default function RootHomePage() {
           <div className="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border border-zinc-200 flex flex-col max-h-[92dvh] overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-3.5 border-b border-zinc-100 shrink-0">
-              <h3 className="text-lg font-black text-black">Manual Order</h3>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setIsWaiterOrderModalOpen(false)}
+                  className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 text-xs font-bold transition cursor-pointer active:scale-95"
+                  title="Back to Previous Screen"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Back</span>
+                </button>
+                <h3 className="text-base sm:text-lg font-black text-black">Manual Order</h3>
+              </div>
               <button
                 type="button"
                 onClick={() => setIsWaiterOrderModalOpen(false)}
@@ -1515,41 +1527,75 @@ export default function RootHomePage() {
       )}
 
       {/* ============================================================== */}
-      {/* 5. DIRECT QUICK PRINT BILL MODAL (Touch-Friendly Menu Selection) */}
+      {/* 5. DIRECT QUICK PRINT BILL (FULL SCREEN VIEW)                   */}
       {/* ============================================================== */}
       {isDirectBillModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border border-zinc-200 flex flex-col max-h-[92dvh] overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150">
-            {/* Header */}
-            <div className="flex items-center justify-between pb-3.5 border-b border-zinc-100 shrink-0">
-              <div className="flex items-center space-x-2.5">
-                <div className="w-9 h-9 rounded-xl bg-black text-white flex items-center justify-center">
-                  <Printer className="w-5 h-5 text-emerald-400" />
-                </div>
-                <div>
-                  <h3 className="text-base sm:text-lg font-black text-black">Direct Print Bill</h3>
-                  <p className="text-[11px] font-semibold text-zinc-500">
-                    Select dishes available today and print bill directly
-                  </p>
-                </div>
-              </div>
+        <div className="fixed inset-0 z-50 bg-[#F8F9FA] flex flex-col w-full h-full overflow-hidden animate-in fade-in duration-150 text-black">
+          {/* Top Full Screen Navigation Bar with Back Button */}
+          <header className="bg-white border-b border-zinc-200 px-4 sm:px-6 py-3 flex items-center justify-between shrink-0 shadow-xs z-10">
+            <div className="flex items-center space-x-3">
               <button
                 type="button"
                 onClick={() => {
                   setDirectBillCart([]);
                   setIsDirectBillModalOpen(false);
                 }}
-                className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 hover:text-black flex items-center justify-center transition cursor-pointer"
+                className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-black font-extrabold text-xs transition cursor-pointer active:scale-95 shadow-xs"
+                title="Back to Home Dashboard"
               >
-                <X className="w-4 h-4" />
+                <ArrowLeft className="w-4 h-4" />
+                <span>Back</span>
               </button>
+              <div className="h-6 w-px bg-zinc-200 hidden sm:block" />
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-xl bg-black text-white flex items-center justify-center">
+                  <Printer className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div>
+                  <h2 className="text-sm sm:text-base font-black text-black leading-tight flex items-center space-x-2">
+                    <span>Direct Print Bill</span>
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                      ⚡ Instant POS
+                    </span>
+                  </h2>
+                  <p className="text-[11px] font-semibold text-zinc-500 hidden sm:block">
+                    Select dishes available today &amp; print instant customer receipt
+                  </p>
+                </div>
+              </div>
             </div>
 
-            {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto py-3 space-y-3.5 pr-1">
+            <div className="flex items-center space-x-2">
+              {directBillCart.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setDirectBillCart([])}
+                  className="px-3 py-1.5 rounded-xl border border-zinc-200 text-zinc-600 hover:text-red-600 hover:border-red-200 text-xs font-bold transition cursor-pointer"
+                >
+                  Clear Cart ({directBillCart.reduce((a, b) => a + b.qty, 0)})
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setDirectBillCart([]);
+                  setIsDirectBillModalOpen(false);
+                }}
+                className="w-9 h-9 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-600 hover:text-black flex items-center justify-center transition cursor-pointer"
+                title="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </header>
+
+          {/* Full Screen Body: Two Column POS Layout */}
+          <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+            {/* LEFT COLUMN: Dish Selection & Search */}
+            <div className="flex-1 flex flex-col overflow-hidden bg-white p-3 sm:p-5 border-b lg:border-b-0 lg:border-r border-zinc-200 space-y-3">
               {/* Notice Banner */}
               {directBillNotice && (
-                <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center justify-between">
+                <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center justify-between shrink-0">
                   <div className="flex items-center space-x-2">
                     <Check className="w-4 h-4 shrink-0 text-emerald-600" />
                     <span>{directBillNotice}</span>
@@ -1557,9 +1603,7 @@ export default function RootHomePage() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (typeof window !== 'undefined') {
-                        window.print();
-                      }
+                      if (typeof window !== 'undefined') window.print();
                     }}
                     className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider cursor-pointer"
                   >
@@ -1569,236 +1613,239 @@ export default function RootHomePage() {
               )}
 
               {/* Search Bar */}
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400 pointer-events-none" />
+              <div className="relative shrink-0">
+                <Search className="w-4 h-4 absolute left-3.5 top-3 text-zinc-400 pointer-events-none" />
                 <input
                   type="text"
                   value={directBillSearch}
                   onChange={(e) => setDirectBillSearch(e.target.value)}
                   placeholder="Search available dish / വിഭവം തിരയുക..."
-                  className="w-full pl-9 pr-14 py-2.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-semibold focus:outline-none focus:border-black text-zinc-900"
+                  className="w-full pl-10 pr-14 py-2.5 rounded-2xl bg-zinc-50 border border-zinc-200 text-xs sm:text-sm font-semibold focus:outline-none focus:border-black text-zinc-900"
                 />
                 {directBillSearch && (
                   <button
                     type="button"
                     onClick={() => setDirectBillSearch('')}
-                    className="absolute right-3 top-2.5 text-zinc-400 hover:text-black text-xs font-bold cursor-pointer"
+                    className="absolute right-3.5 top-2.5 text-zinc-400 hover:text-black text-xs font-bold cursor-pointer px-2 py-1"
                   >
                     Clear
                   </button>
                 )}
               </div>
 
-              {/* Dishes Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto p-1 border border-zinc-100 rounded-2xl bg-zinc-50/50">
+              {/* Dishes Grid: Touch-Friendly Responsive Full Screen Layout */}
+              <div className="flex-1 overflow-y-auto p-1">
                 {filteredDirectBillDishes.length === 0 ? (
-                  <div className="col-span-full py-10 text-center text-xs text-zinc-400 font-semibold">
+                  <div className="py-20 text-center text-sm text-zinc-400 font-semibold">
                     No available dishes found for today.
                   </div>
                 ) : (
-                  filteredDirectBillDishes.map((dish: any) => {
-                    const inCart = directBillCart.find((c) => c.id === dish.id);
-                    return (
-                      <div
-                        key={dish.id}
-                        onClick={() => handleDirectBillAddItem(dish)}
-                        className={`p-2.5 rounded-xl border transition cursor-pointer flex items-center justify-between select-none ${
-                          inCart
-                            ? 'bg-zinc-50 border-black ring-1 ring-black'
-                            : 'bg-white border-zinc-200 hover:border-zinc-400'
-                        }`}
-                      >
-                        <div className="truncate pr-2">
-                          <p className="text-xs font-extrabold text-zinc-900 truncate">{dish.name}</p>
-                          {dish.malayalamName && (
-                            <p className="text-[10px] text-zinc-500 truncate">{dish.malayalamName}</p>
-                          )}
-                          <p className="text-[11px] font-mono font-black text-black mt-0.5">
-                            ₹{Math.round((dish.pricePaise || (dish.priceInr ? dish.priceInr * 100 : 0)) / 100)}
-                          </p>
-                        </div>
-
-                        {inCart ? (
-                          <div 
-                            className="flex items-center space-x-1.5 bg-black text-white px-2 py-1 rounded-lg shrink-0"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => handleDirectBillRemoveItem(dish.id)}
-                              className="w-5 h-5 flex items-center justify-center hover:bg-zinc-800 rounded font-black text-sm"
-                            >
-                              -
-                            </button>
-                            <span className="text-xs font-mono font-black px-1">{inCart.qty}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleDirectBillAddItem(dish)}
-                              className="w-5 h-5 flex items-center justify-center hover:bg-zinc-800 rounded font-black text-sm"
-                            >
-                              +
-                            </button>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
+                    {filteredDirectBillDishes.map((dish: any) => {
+                      const inCart = directBillCart.find((c) => c.id === dish.id);
+                      return (
+                        <div
+                          key={dish.id}
+                          onClick={() => handleDirectBillAddItem(dish)}
+                          className={`p-3.5 rounded-2xl border transition cursor-pointer flex flex-col justify-between select-none ${
+                            inCart
+                              ? 'bg-zinc-50 border-black ring-2 ring-black shadow-sm'
+                              : 'bg-white border-zinc-200 hover:border-zinc-400 hover:shadow-xs'
+                          }`}
+                        >
+                          <div className="space-y-0.5">
+                            <p className="text-xs sm:text-sm font-extrabold text-zinc-900 line-clamp-1">{dish.name}</p>
+                            {dish.malayalamName && (
+                              <p className="text-[11px] text-zinc-500 line-clamp-1">{dish.malayalamName}</p>
+                            )}
+                            <p className="text-sm font-mono font-black text-black pt-1">
+                              ₹{Math.round((dish.pricePaise || (dish.priceInr ? dish.priceInr * 100 : 0)) / 100)}
+                            </p>
                           </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDirectBillAddItem(dish);
-                            }}
-                            className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-black hover:text-white text-zinc-800 font-extrabold text-xs transition cursor-pointer shrink-0"
-                          >
-                            + Add
-                          </button>
-                        )}
+
+                          <div className="pt-2.5 mt-auto">
+                            {inCart ? (
+                              <div
+                                className="flex items-center justify-between bg-black text-white px-2.5 py-1.5 rounded-xl shrink-0"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => handleDirectBillRemoveItem(dish.id)}
+                                  className="w-6 h-6 flex items-center justify-center hover:bg-zinc-800 rounded font-black text-base"
+                                >
+                                  -
+                                </button>
+                                <span className="text-xs font-mono font-black px-2">{inCart.qty}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDirectBillAddItem(dish)}
+                                  className="w-6 h-6 flex items-center justify-center hover:bg-zinc-800 rounded font-black text-base"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDirectBillAddItem(dish);
+                                }}
+                                className="w-full py-1.5 rounded-xl bg-zinc-100 hover:bg-black hover:text-white text-zinc-800 font-extrabold text-xs transition cursor-pointer text-center"
+                              >
+                                + Add
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* RIGHT COLUMN: Order Details, Cart Items & Checkout */}
+            <div className="w-full lg:w-96 xl:w-[420px] bg-zinc-50 flex flex-col shrink-0 border-l border-zinc-200">
+              {/* Cart Items Header */}
+              <div className="p-4 bg-white border-b border-zinc-200 flex items-center justify-between shrink-0">
+                <span className="flex items-center space-x-2 text-xs font-black uppercase tracking-wider text-zinc-700">
+                  <ShoppingBag className="w-4 h-4 text-black" />
+                  <span>Current Bill Items ({directBillCart.reduce((a, b) => a + b.qty, 0)})</span>
+                </span>
+                <span className="font-mono font-black text-base text-black">
+                  ₹{(directBillTotalPaise / 100).toFixed(2)}
+                </span>
+              </div>
+
+              {/* Scrollable Selected Items */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                {directBillCart.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-6 text-zinc-400 space-y-2">
+                    <Receipt className="w-10 h-10 stroke-1 text-zinc-300" />
+                    <p className="text-xs font-bold">No dishes selected yet.</p>
+                    <p className="text-[11px] text-zinc-400">Click any dish on the left to add it to this bill.</p>
+                  </div>
+                ) : (
+                  directBillCart.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between text-zinc-700 bg-white p-3 rounded-2xl border border-zinc-200/80 shadow-2xs">
+                      <div className="truncate pr-2">
+                        <p className="font-bold text-xs text-zinc-900 truncate">{item.name}</p>
+                        <p className="text-[11px] text-zinc-500 font-mono mt-0.5">
+                          {item.qty} × ₹{(item.pricePaise / 100).toFixed(0)}
+                        </p>
                       </div>
-                    );
-                  })
+                      <div className="flex items-center space-x-2 shrink-0 font-mono">
+                        <span className="font-black text-sm text-black">₹{((item.pricePaise * item.qty) / 100).toFixed(2)}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleDirectBillRemoveItem(item.id)}
+                          className="text-zinc-400 hover:text-red-600 p-1 transition cursor-pointer rounded-lg hover:bg-zinc-100"
+                          title="Remove"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
                 )}
               </div>
 
-              {/* Selected Items & Total */}
-              {directBillCart.length > 0 && (
-                <div className="p-3.5 bg-zinc-50 rounded-2xl border border-zinc-200 space-y-2.5">
-                  <div className="flex items-center justify-between text-xs font-extrabold text-zinc-800 pb-1.5 border-b border-zinc-200">
-                    <span className="flex items-center space-x-1.5">
-                      <ShoppingBag className="w-3.5 h-3.5" />
-                      <span>Selected Items ({directBillCart.reduce((a, b) => a + b.qty, 0)})</span>
-                    </span>
-                    <span className="font-mono font-black text-sm text-black">
-                      Total: ₹{(directBillTotalPaise / 100).toFixed(2)}
-                    </span>
-                  </div>
-
-                  <div className="max-h-28 overflow-y-auto space-y-1.5 text-xs pr-1">
-                    {directBillCart.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between text-zinc-700 bg-white p-2 rounded-xl border border-zinc-200/60">
-                        <div className="truncate pr-2">
-                          <span className="font-bold text-zinc-900">{item.name}</span>
-                          <span className="text-[11px] text-zinc-500 font-mono ml-2">
-                            ({item.qty} × ₹{(item.pricePaise / 100).toFixed(0)})
-                          </span>
-                        </div>
-                        <div className="flex items-center space-x-2 shrink-0 font-mono">
-                          <span className="font-black text-black">₹{((item.pricePaise * item.qty) / 100).toFixed(2)}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleDirectBillRemoveItem(item.id)}
-                            className="text-zinc-400 hover:text-red-600 p-0.5 transition cursor-pointer"
-                            title="Remove"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Order Type Selection: Dine In vs Takeaway */}
-                  <div className="pt-2 border-t border-zinc-200/80 space-y-1.5">
-                    <span className="text-xs font-black text-zinc-700 uppercase tracking-wider block">Order Type</span>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        type="button"
-                        onClick={() => setDirectBillOrderType('TAKEAWAY')}
-                        className={`flex-1 py-2 px-3 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center space-x-1.5 ${
-                          directBillOrderType === 'TAKEAWAY'
-                            ? 'bg-black text-white shadow-xs'
-                            : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
-                        }`}
-                      >
-                        <span>🛍️ Takeaway</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDirectBillOrderType('DINE_IN')}
-                        className={`flex-1 py-2 px-3 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center space-x-1.5 ${
-                          directBillOrderType === 'DINE_IN'
-                            ? 'bg-black text-white shadow-xs'
-                            : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
-                        }`}
-                      >
-                        <span>🍽️ Dine-In</span>
-                      </button>
-                    </div>
-
-                    {/* Optional table selector for Dine-In */}
-                    {directBillOrderType === 'DINE_IN' && tables.length > 0 && (
-                      <div className="pt-1.5">
-                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
-                          Select Dine-In Table:
-                        </label>
-                        <select
-                          value={directBillTableCode}
-                          onChange={(e) => setDirectBillTableCode(e.target.value)}
-                          className="w-full py-2 px-3 rounded-xl bg-white border border-zinc-300 font-bold text-xs text-black focus:outline-none focus:border-black"
-                        >
-                          <option value="">Counter Table / General Dine-In</option>
-                          {tables.map((t) => (
-                            <option key={t.tableCode} value={t.tableCode}>
-                              {t.displayName || `Table ${t.tableCode}`} ({t.roomName || 'Dining Area'})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Payment Mode Selector */}
-                  <div className="flex items-center justify-between pt-2 border-t border-zinc-200/80">
-                    <span className="text-xs font-black text-zinc-700 uppercase tracking-wider">Payment Mode</span>
-                    <div className="flex items-center space-x-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setDirectBillPaymentMode('CASH')}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer ${
-                          directBillPaymentMode === 'CASH'
-                            ? 'bg-black text-white shadow-xs'
-                            : 'bg-zinc-200/70 text-zinc-700 hover:bg-zinc-200'
-                        }`}
-                      >
-                        💵 Cash
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDirectBillPaymentMode('UPI')}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer ${
-                          directBillPaymentMode === 'UPI'
-                            ? 'bg-black text-white shadow-xs'
-                            : 'bg-zinc-200/70 text-zinc-700 hover:bg-zinc-200'
-                        }`}
-                      >
-                        📱 UPI
-                      </button>
-                    </div>
+              {/* Order Settings & Sticky Checkout Bar */}
+              <div className="p-4 bg-white border-t border-zinc-200 space-y-3 shrink-0">
+                {/* Order Type Selection */}
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-black text-zinc-500 uppercase tracking-wider block">Order Type</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDirectBillOrderType('TAKEAWAY')}
+                      className={`py-2 px-3 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center space-x-1.5 ${
+                        directBillOrderType === 'TAKEAWAY'
+                          ? 'bg-black text-white shadow-xs'
+                          : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+                      }`}
+                    >
+                      <span>🛍️ Takeaway</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDirectBillOrderType('DINE_IN')}
+                      className={`py-2 px-3 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center space-x-1.5 ${
+                        directBillOrderType === 'DINE_IN'
+                          ? 'bg-black text-white shadow-xs'
+                          : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+                      }`}
+                    >
+                      <span>🍽️ Dine-In</span>
+                    </button>
                   </div>
                 </div>
-              )}
-            </div>
 
-            {/* Modal Footer */}
-            <div className="pt-3 border-t border-zinc-100 flex items-center space-x-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setDirectBillCart([]);
-                  setIsDirectBillModalOpen(false);
-                }}
-                className="py-3 px-4 rounded-2xl border border-zinc-200 text-xs font-bold text-zinc-600 hover:bg-zinc-50 cursor-pointer transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleOpenHomeDirectAuth}
-                disabled={directBillCart.length === 0}
-                className="flex-1 py-3 px-5 rounded-2xl bg-black hover:bg-zinc-800 text-white font-black text-xs flex items-center justify-center space-x-2 shadow-lg cursor-pointer disabled:opacity-40 transition active:scale-98"
-              >
-                <Lock className="w-4 h-4 text-emerald-400" />
-                <span>
-                  Authorize &amp; Settle {directBillCart.length > 0 ? `(₹${(directBillTotalPaise / 100).toFixed(2)})` : ''}
-                </span>
-              </button>
+                {/* Optional Table Selector for Dine-In */}
+                {directBillOrderType === 'DINE_IN' && tables.length > 0 && (
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">
+                      Select Dine-In Table:
+                    </label>
+                    <select
+                      value={directBillTableCode}
+                      onChange={(e) => setDirectBillTableCode(e.target.value)}
+                      className="w-full py-2 px-3 rounded-xl bg-zinc-50 border border-zinc-300 font-bold text-xs text-black focus:outline-none focus:border-black cursor-pointer"
+                    >
+                      <option value="">Counter Table / General Dine-In</option>
+                      {tables.map((t) => (
+                        <option key={t.tableCode} value={t.tableCode}>
+                          {t.displayName || `Table ${t.tableCode}`} ({t.roomName || 'Dining Area'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Payment Mode */}
+                <div className="space-y-1.5">
+                  <span className="text-[11px] font-black text-zinc-500 uppercase tracking-wider block">Payment Mode</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDirectBillPaymentMode('CASH')}
+                      className={`py-2 px-3 rounded-xl text-xs font-extrabold transition cursor-pointer flex items-center justify-center space-x-1.5 ${
+                        directBillPaymentMode === 'CASH'
+                          ? 'bg-black text-white shadow-xs'
+                          : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+                      }`}
+                    >
+                      <span>💵 Cash</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDirectBillPaymentMode('UPI')}
+                      className={`py-2 px-3 rounded-xl text-xs font-extrabold transition cursor-pointer flex items-center justify-center space-x-1.5 ${
+                        directBillPaymentMode === 'UPI'
+                          ? 'bg-black text-white shadow-xs'
+                          : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+                      }`}
+                    >
+                      <span>📱 UPI</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Authorize & Settle Button */}
+                <button
+                  type="button"
+                  onClick={handleOpenHomeDirectAuth}
+                  disabled={directBillCart.length === 0}
+                  className="w-full py-3.5 px-5 rounded-2xl bg-black hover:bg-zinc-800 text-white font-black text-sm flex items-center justify-center space-x-2 shadow-lg cursor-pointer disabled:opacity-40 transition active:scale-98"
+                >
+                  <Lock className="w-4 h-4 text-emerald-400" />
+                  <span>
+                    Authorize &amp; Settle {directBillCart.length > 0 ? `(₹${(directBillTotalPaise / 100).toFixed(2)})` : ''}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1808,6 +1855,23 @@ export default function RootHomePage() {
       {isHomeDirectAuthOpen && (
         <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 sm:p-6 shadow-2xl border border-zinc-200 text-center animate-in zoom-in-95 duration-150 my-auto">
+            {/* Top Back Navigation Bar */}
+            <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-zinc-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsHomeDirectAuthOpen(false);
+                  setIsDirectBillModalOpen(true);
+                }}
+                className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 text-xs font-bold transition cursor-pointer active:scale-95"
+                title="Back to Direct Print Bill"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back</span>
+              </button>
+              <span className="text-[11px] font-black uppercase tracking-wider text-zinc-400">Authorization</span>
+              <div className="w-12" />
+            </div>
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-zinc-100 text-black flex items-center justify-center mx-auto mb-2.5">
               <Lock className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
@@ -1926,7 +1990,16 @@ export default function RootHomePage() {
             {/* Preview Header */}
             <div className="flex items-center justify-between pb-3 border-b border-zinc-100 shrink-0">
               <div className="flex items-center space-x-2">
-                <Receipt className="w-5 h-5 text-black" />
+                <button
+                  type="button"
+                  onClick={() => setIsPreviewingDirectBill(false)}
+                  className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-black text-xs font-bold transition cursor-pointer mr-1"
+                  title="Back to Previous Screen"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Back</span>
+                </button>
+                <Receipt className="w-4 h-4 text-black" />
                 <h3 className="text-sm font-black text-black">Official Bill Preview</h3>
               </div>
               <button

@@ -23,7 +23,8 @@ import {
   CheckCircle2,
   Printer,
   Receipt,
-  Edit3
+  Edit3,
+  ArrowLeft
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { getCurrentUser } from '../../lib/api';
@@ -598,11 +599,29 @@ export default function TablesManagementPage() {
         {activeRoomView === null && (
           <div className="space-y-4">
             {/* Header */}
-            <div>
-              <h1 className="text-xl sm:text-2xl font-black text-black">Table Management</h1>
-              <p className="text-xs font-semibold text-zinc-400 mt-0.5">
-                Select a room below to view its tables, manage seats, or print table QR stands
-              </p>
+            <div className="flex items-center space-x-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== 'undefined' && window.history.length > 1) {
+                    router.back();
+                  } else {
+                    router.push('/');
+                  }
+                }}
+                className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-black font-extrabold text-xs transition cursor-pointer active:scale-95 shadow-xs"
+                title="Back to Previous Screen"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Back</span>
+              </button>
+              <div className="h-6 w-px bg-zinc-200" />
+              <div>
+                <h1 className="text-xl sm:text-2xl font-black text-black">Table Management</h1>
+                <p className="text-xs font-semibold text-zinc-400 mt-0.5">
+                  Select a room below to view its tables, manage seats, or print table QR stands
+                </p>
+              </div>
             </div>
 
             {/* ROW 1: ADD TABLE CARD (Covers the full first row) */}
@@ -716,7 +735,8 @@ export default function TablesManagementPage() {
                   onClick={() => setActiveRoomView(null)}
                   className="px-3 py-1.5 rounded-xl border border-zinc-300 hover:border-black bg-white hover:bg-zinc-100 text-black font-black text-xs flex items-center space-x-1.5 shadow-2xs transition cursor-pointer"
                 >
-                  <span>&larr; Back to Rooms</span>
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Back to Rooms</span>
                 </button>
                 <div>
                   <h1 className="text-xl sm:text-2xl font-black text-black flex items-center space-x-2">

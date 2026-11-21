@@ -1232,13 +1232,24 @@ function CustomerOrderingContent() {
           <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-6 pb-[max(1.5rem,env(safe-area-inset-bottom,0px))] shadow-2xl max-h-[85vh] flex flex-col justify-between animate-in slide-in-from-bottom duration-200">
             <div>
               <div className="flex items-center justify-between pb-3 border-b border-stone-200">
-                <div>
-                  <h3 className="text-base sm:text-lg font-bold text-stone-950">
-                    {activeExistingOrder ? `Add Dishes to Order #${activeExistingOrder.customerCode}` : 'Table Order Summary'}
-                  </h3>
-                  <p className="text-xs text-stone-500">
-                    {tableDisplayName} • <strong className="font-mono text-[#9E341D]">{tableCode}</strong>
-                  </p>
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsCartOpen(false)}
+                    className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-900 text-xs font-bold transition cursor-pointer active:scale-95 mr-1"
+                    title="Back to Menu"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Back</span>
+                  </button>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-bold text-stone-950">
+                      {activeExistingOrder ? `Add Dishes to Order #${activeExistingOrder.customerCode}` : 'Table Order Summary'}
+                    </h3>
+                    <p className="text-xs text-stone-500">
+                      {tableDisplayName} • <strong className="font-mono text-[#9E341D]">{tableCode}</strong>
+                    </p>
+                  </div>
                 </div>
                 <button
                   onClick={() => setIsCartOpen(false)}

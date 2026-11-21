@@ -51,8 +51,33 @@ export default function BillingTerminalPage() {
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [billPreview, setBillPreview] = useState<any | null>(null);
 
-  // Synced Hierarchical Back Navigation: Checkout -> Orders -> Room Tables -> All Rooms -> Previous Page
+  // Synced Hierarchical Back Navigation: Modals -> Checkout -> Orders -> Room Tables -> All Rooms -> Previous Page
   const handleBack = () => {
+    if (isDirectBillAuthOpen) {
+      setIsDirectBillAuthOpen(false);
+      setIsDirectBillOpen(true);
+      return;
+    }
+    if (isDirectBillOpen) {
+      setIsDirectBillOpen(false);
+      return;
+    }
+    if (isAddDishModalOpen) {
+      setIsAddDishModalOpen(false);
+      return;
+    }
+    if (isTotalSalesModalOpen) {
+      setIsTotalSalesModalOpen(false);
+      return;
+    }
+    if (isPinModalOpen) {
+      setIsPinModalOpen(false);
+      return;
+    }
+    if (billPreview) {
+      setBillPreview(null);
+      return;
+    }
     if (typeof window !== 'undefined' && window.location.hash) {
       window.history.back();
       return;
@@ -2465,6 +2490,23 @@ Status: WIRELESS TEST PASSED!
       {isDirectBillAuthOpen && (
         <div className="fixed inset-0 z-60 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
           <div className="bg-white rounded-3xl max-w-sm w-full p-5 sm:p-6 shadow-2xl border border-zinc-200 text-center animate-in zoom-in-95 duration-150 my-auto">
+            {/* Top Back Navigation Bar */}
+            <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-zinc-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDirectBillAuthOpen(false);
+                  setIsDirectBillOpen(true);
+                }}
+                className="inline-flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 text-xs font-bold transition cursor-pointer active:scale-95"
+                title="Back to Quick Bill"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back</span>
+              </button>
+              <span className="text-[11px] font-black uppercase tracking-wider text-zinc-400">Authorization</span>
+              <div className="w-12" />
+            </div>
             <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-brand-50 text-brand-600 flex items-center justify-center mx-auto mb-2.5">
               <Lock className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
