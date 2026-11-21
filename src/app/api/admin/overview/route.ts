@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/serverDb';
+import { db, readDailyLedger, readAllDailyLedgers } from '@/lib/serverDb';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,28 +13,106 @@ export async function OPTIONS() {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const range = searchParams.get('range') || 'today'; // 'today' | '2days' | '3days' | 'week' | 'month'
+  const range = searchParams.get('range') || 'today'; // 'today' | 'yesterday' | '2days' | '3days' | 'week' | 'month'
+  const dateParam = searchParams.get('date');
   const format = searchParams.get('format'); // 'csv' or json
 
   const now = new Date();
-  let cutoffDate = new Date();
-  
-  if (range === 'today') {
-    cutoffDate.setHours(0, 0, 0, 0);
-  } else if (range === '2days') {
-    cutoffDate = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
-  } else if (range === '3days') {
-    cutoffDate = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
-  } else if (range === 'week') {
-    cutoffDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  } else if (range === 'month') {
-    cutoffDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const getIstDate = (d: Date | string) => {
+    try {
+      const dateObj = typeof d === 'string' ? new Date(d) : d;
+      return dateObj.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    } catch {
+      return '';
+    }
+  };
+
+  const todayIst = getIstDate(now);
+  const yesterdayDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const yesterdayIst = getIstDate(yesterdayDate);
+
+  const normalizeDate = (dStr: string) => {
+    if (!dStr) return '';
+    if (dStr === 'today') return todayIst;
+    if (dStr === 'yesterday') return yesterdayIst;
+    if (dStr.includes('/')) {
+      const parts = dStr.split('/');
+      if (parts.length === 3) {
+        const [d, m, y] = parts;
+        return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+      }
+    }
+    return dStr;
+  };
+
+  // Combine historical sales with ALL disk daily ledgers and any paid orders
+  const allLedgers = readAllDailyLedgers();
+  const allSalesList: any[] = [];
+  const knownCodes = new Set<string>();
+
+  for (const s of [...allLedgers, ...(db.historicalSales || [])]) {
+    const code = s.orderCode || s.invoiceNumber || s.id;
+    if (code && !knownCodes.has(code)) {
+      knownCodes.add(code);
+      allSalesList.push(s);
+    }
   }
 
-  // Filter historical sales within time range
-  const filteredSales = db.historicalSales.filter(
-    (s) => new Date(s.settledAt) >= cutoffDate
-  );
+  (db.orders || []).forEach((o) => {
+    if (o.paymentStatus === 'PAID' && !knownCodes.has(o.customerCode)) {
+      knownCodes.add(o.customerCode);
+      const tableObj = (db.tables || []).find((t) => t.tableCode === o.tableCode);
+      allSalesList.push({
+        id: o.id,
+        invoiceNumber: (o as any).invoiceNumber || `INV-${o.customerCode.replace('#', '')}`,
+        orderCode: o.customerCode,
+        tableCode: o.tableCode,
+        roomName: tableObj?.roomName || 'Dining Area',
+        grandTotalPaise: o.grandTotalPaise,
+        paymentMode: o.paymentMode || 'CASH',
+        settledAt: o.paidAt || o.createdAt,
+        cashier: o.cashierName || 'Cashier',
+        items: o.items || [],
+        itemsSummary: (o.items || []).map((i: any) => `${i.itemName} X ${i.quantity}`).join(', '),
+      });
+    }
+  });
+
+  let filteredSales: any[] = [];
+
+  if (dateParam) {
+    const targetDate = normalizeDate(dateParam);
+    const lower = (targetDate || '').toLowerCase();
+    if (lower === 'all' || lower === 'all-time-history' || lower === 'all time') {
+      filteredSales = allSalesList;
+    } else if (lower.includes('7days') || lower.includes('last-7-days') || lower.includes('last 7 days')) {
+      const d7 = getIstDate(new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000));
+      filteredSales = allSalesList.filter((s) => getIstDate(s.settledAt) >= d7);
+    } else if (lower.includes('30days') || lower.includes('last-30-days') || lower.includes('last 30 days') || lower.includes('this month')) {
+      const d30 = getIstDate(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
+      filteredSales = allSalesList.filter((s) => getIstDate(s.settledAt) >= d30);
+    } else {
+      filteredSales = allSalesList.filter((s) => getIstDate(s.settledAt) === targetDate);
+    }
+  } else if (range === 'yesterday') {
+    filteredSales = allSalesList.filter((s) => getIstDate(s.settledAt) === yesterdayIst);
+  } else if (range === 'today') {
+    filteredSales = allSalesList.filter((s) => getIstDate(s.settledAt) === todayIst);
+  } else {
+    let cutoffDate = new Date(0); // Default to all time
+    if (range === '2days') {
+      cutoffDate = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
+    } else if (range === '3days') {
+      cutoffDate = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+    } else if (range === 'week' || range === '7days') {
+      cutoffDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    } else if (range === 'month') {
+      cutoffDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    }
+    filteredSales = allSalesList.filter(
+      (s) => new Date(s.settledAt) >= cutoffDate
+    );
+  }
 
   // If CSV download requested
   if (format === 'csv') {
@@ -223,9 +301,13 @@ ${xmlRows}
 
     for (const slot of slots) {
       const slotSales = filteredSales.filter((s) => {
-        const d = new Date(s.settledAt);
-        const hr = d.getHours();
-        return hr >= slot.start && hr < slot.end;
+        try {
+          const d = new Date(s.settledAt);
+          const hr = parseInt(d.toLocaleTimeString('en-US', { timeZone: 'Asia/Kolkata', hour12: false, hour: '2-digit' }), 10);
+          return hr >= slot.start && hr < slot.end;
+        } catch {
+          return false;
+        }
       });
       const sPaise = slotSales.reduce((acc, s) => acc + (s.grandTotalPaise || 0), 0);
       const oCount = slotSales.length;
@@ -237,14 +319,60 @@ ${xmlRows}
         aovPaise: oCount > 0 ? Math.round(sPaise / oCount) : 0,
       });
     }
+  } else if (range === 'month') {
+    // 6 evenly distributed intervals across the last 30 days
+    const intervalDays = 5;
+    for (let i = 5; i >= 0; i--) {
+      const startMs = now.getTime() - (i + 1) * intervalDays * 24 * 60 * 60 * 1000;
+      const endMs = now.getTime() - i * intervalDays * 24 * 60 * 60 * 1000;
+      const dLabel = new Date(endMs).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short' });
+
+      const bucketSales = filteredSales.filter((s) => {
+        const t = new Date(s.settledAt).getTime();
+        return t >= startMs && t < endMs;
+      });
+
+      const sPaise = bucketSales.reduce((acc, s) => acc + (s.grandTotalPaise || 0), 0);
+      const oCount = bucketSales.length;
+
+      timeline.push({
+        label: dLabel,
+        salesPaise: sPaise,
+        ordersCount: oCount,
+        aovPaise: oCount > 0 ? Math.round(sPaise / oCount) : 0,
+      });
+    }
+  } else if (range === 'all') {
+    // 6 months timeline
+    for (let i = 5; i >= 0; i--) {
+      const mDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthLabel = mDate.toLocaleDateString('en-IN', { month: 'short' });
+      const yearMonth = mDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }).slice(0, 7);
+
+      const monthSales = filteredSales.filter((s) => {
+        const sYm = getIstDate(s.settledAt).slice(0, 7);
+        return sYm === yearMonth;
+      });
+
+      const sPaise = monthSales.reduce((acc, s) => acc + (s.grandTotalPaise || 0), 0);
+      const oCount = monthSales.length;
+
+      timeline.push({
+        label: monthLabel,
+        salesPaise: sPaise,
+        ordersCount: oCount,
+        aovPaise: oCount > 0 ? Math.round(sPaise / oCount) : 0,
+      });
+    }
   } else {
-    const daysCount = range === 'month' ? 30 : 7;
+    // Last 7 days timeline
+    const daysCount = 7;
     for (let i = daysCount - 1; i >= 0; i--) {
       const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-      const isoDay = d.toISOString().slice(0, 10);
-      const dayLabel = d.toLocaleDateString('en-IN', { weekday: 'short' });
+      const targetIst = getIstDate(d);
+      const dayLabel = d.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', weekday: 'short' });
 
-      const daySales = filteredSales.filter((s) => s.settledAt && s.settledAt.startsWith(isoDay));
+      const daySales = filteredSales.filter((s) => getIstDate(s.settledAt) === targetIst);
       const sPaise = daySales.reduce((acc, s) => acc + (s.grandTotalPaise || 0), 0);
       const oCount = daySales.length;
 
@@ -256,6 +384,36 @@ ${xmlRows}
       });
     }
   }
+
+  const salesList = filteredSales.map((s) => {
+    let itemsText = 'Dine-In Order';
+    if (Array.isArray((s as any).items) && (s as any).items.length > 0) {
+      itemsText = (s as any).items
+        .map((it: any) => `${it.itemNameSnapshot || it.itemName || it.name || 'Dish'} X ${it.quantity || 1}`)
+        .join(', ');
+    } else if (s.itemsSummary) {
+      itemsText = s.itemsSummary;
+    }
+
+    const istDate = new Date(s.settledAt).toLocaleDateString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }).toUpperCase();
+
+    return {
+      id: s.id || s.invoiceNumber,
+      orderNumber: s.orderCode || s.invoiceNumber,
+      type: 'Dine-In',
+      date: istDate,
+      items: itemsText,
+      amountPaise: s.grandTotalPaise,
+      paymentType: s.paymentMode || 'Cash',
+      tableCode: s.tableCode || 'T1',
+      cashier: s.cashier || 'Cashier',
+    };
+  });
 
   return NextResponse.json(
     {
@@ -271,6 +429,7 @@ ${xmlRows}
       topSellingItems,
       tableWiseSales,
       timeline,
+      sales: salesList,
       salesCount: filteredSales.length,
       range,
     },

@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/serverDb';
+import path from 'path';
+import fs from 'fs';
+import { db, getIstDateString, normalizeToIsoDate, readDailyLedger, readAllDailyLedgers } from '@/lib/serverDb';
+import { generateUnifiedMasterDatabaseXml } from '@/lib/masterExcelDatabase';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,41 +17,171 @@ export async function OPTIONS() {
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const dateQuery = searchParams.get('date') || new Date().toISOString().slice(0, 10);
+    const rawDateQuery = searchParams.get('date') || 'today';
     const format = searchParams.get('format') || 'json';
     const reportType = searchParams.get('report') || 'all';
 
-    // Pretty date format for download filename: e.g. 10-Nov-2026
-    let dateLabel = dateQuery;
-    const dParts = dateQuery.split('-');
-    if (dParts.length === 3) {
-      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      const mIdx = parseInt(dParts[1], 10) - 1;
-      if (mIdx >= 0 && mIdx < 12) {
-        dateLabel = `${dParts[2]}-${months[mIdx]}-${dParts[0]}`;
+    const now = new Date();
+    const todayIst = getIstDateString(now);
+    const yesterdayDate = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const yesterdayIst = getIstDateString(yesterdayDate);
+
+    const startDateParam = searchParams.get('startDate');
+    const endDateParam = searchParams.get('endDate');
+
+    const normalizeDateStr = (str: string) => {
+      if (!str) return todayIst;
+      return normalizeToIsoDate(str);
+    };
+
+    let filterMode: 'single' | 'range' | 'all' = 'single';
+    let targetSingleDate = todayIst;
+    let rangeStartDate = todayIst;
+    let rangeEndDate = todayIst;
+    let dateLabel = todayIst;
+
+    const lowerQuery = rawDateQuery.trim().toLowerCase();
+    if (lowerQuery === 'all' || lowerQuery === 'all_time' || lowerQuery === 'all time') {
+      filterMode = 'all';
+      dateLabel = 'All-Time-History';
+    } else if (lowerQuery === '7days' || lowerQuery === 'week' || lowerQuery === 'last 7 days' || lowerQuery === 'last_7_days') {
+      filterMode = 'range';
+      const d7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      rangeStartDate = getIstDateString(d7);
+      rangeEndDate = todayIst;
+      dateLabel = `Last-7-Days_${rangeStartDate}_to_${rangeEndDate}`;
+    } else if (lowerQuery === '30days' || lowerQuery === 'month' || lowerQuery === 'last 30 days' || lowerQuery === 'last_30_days' || lowerQuery === 'this month') {
+      filterMode = 'range';
+      const d30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      rangeStartDate = getIstDateString(d30);
+      rangeEndDate = todayIst;
+      dateLabel = `Last-30-Days_${rangeStartDate}_to_${rangeEndDate}`;
+    } else if (startDateParam && endDateParam) {
+      filterMode = 'range';
+      rangeStartDate = normalizeDateStr(startDateParam);
+      rangeEndDate = normalizeDateStr(endDateParam);
+      dateLabel = `${rangeStartDate}_to_${rangeEndDate}`;
+    } else {
+      filterMode = 'single';
+      targetSingleDate = normalizeDateStr(rawDateQuery);
+      if (!targetSingleDate) targetSingleDate = todayIst;
+      dateLabel = targetSingleDate;
+    }
+
+    // 1. COMBINE IMMUTABLE DISK DAILY LEDGERS, HISTORICAL SALES, AND ACTIVE PAID ORDERS
+    const allDiskSales = readAllDailyLedgers();
+    const knownSalesCodes = new Set<string>();
+    const allUnifiedSales: any[] = [];
+
+    // Prioritize immutable disk daily ledgers & historical sales
+    for (const s of [...allDiskSales, ...(db.historicalSales || [])]) {
+      const code = s.orderCode || s.invoiceNumber || s.id;
+      if (code && !knownSalesCodes.has(code)) {
+        knownSalesCodes.add(code);
+        allUnifiedSales.push({
+          id: s.id,
+          invoiceNumber: s.invoiceNumber || code,
+          orderCode: s.orderCode || code,
+          tableCode: s.tableCode || 'COUNTER',
+          roomName: s.roomName || 'Dining Area',
+          grandTotalPaise: s.grandTotalPaise || 0,
+          paymentMode: s.paymentMode || 'CASH',
+          settledAt: s.settledAt || new Date().toISOString(),
+          cashier: s.cashier || 'Cashier Desk',
+          items: s.items || [],
+          itemsSummary: s.itemsSummary || '',
+        });
       }
     }
 
-    // 1. FILTER PAID ORDERS FOR THE DAY
-    const dayOrders = (db.orders || []).filter((o) => {
-      if (o.paymentStatus !== 'PAID') return false;
-      const orderDate = (o.paidAt || o.createdAt || '').slice(0, 10);
-      return !dateQuery || orderDate === dateQuery;
+    for (const o of (db.orders || [])) {
+      if (o.paymentStatus === 'PAID') {
+        const code = o.customerCode || o.id;
+        if (!knownSalesCodes.has(code)) {
+          knownSalesCodes.add(code);
+          const tableObj = (db.tables || []).find((t) => t.tableCode === o.tableCode);
+          allUnifiedSales.push({
+            id: o.id,
+            invoiceNumber: (o as any).invoiceNumber || `INV-${o.customerCode.replace('#', '')}`,
+            orderCode: o.customerCode,
+            tableCode: o.tableCode,
+            roomName: tableObj?.roomName || 'Dining Area',
+            grandTotalPaise: o.grandTotalPaise,
+            paymentMode: o.paymentMode || 'CASH',
+            settledAt: o.paidAt || o.createdAt,
+            cashier: o.cashierName || 'Cashier Desk',
+            items: o.items || [],
+            itemsSummary: (o.items || []).map((i: any) => `${i.itemName} X ${i.quantity}`).join(', '),
+          });
+        }
+      }
+    }
+
+    // If single day is requested, also check if direct readDailyLedger has items not yet in allUnifiedSales
+    if (filterMode === 'single') {
+      const directSingleSales = readDailyLedger(targetSingleDate);
+      for (const d of directSingleSales) {
+        const code = d.orderCode || d.invoiceNumber || d.id;
+        if (code && !knownSalesCodes.has(code)) {
+          knownSalesCodes.add(code);
+          allUnifiedSales.push({
+            id: d.id,
+            invoiceNumber: d.invoiceNumber || code,
+            orderCode: d.orderCode || code,
+            tableCode: d.tableCode || 'COUNTER',
+            roomName: d.roomName || 'Dining Area',
+            grandTotalPaise: d.grandTotalPaise || 0,
+            paymentMode: d.paymentMode || 'CASH',
+            settledAt: d.settledAt || `${targetSingleDate}T12:00:00.000Z`,
+            cashier: d.cashier || 'Cashier Desk',
+            items: d.items || [],
+            itemsSummary: d.itemsSummary || '',
+          });
+        }
+      }
+    }
+
+    // 2. FILTER UNIFIED SALES ACCORDING TO TARGET DATE / RANGE
+    const combinedSales = allUnifiedSales.filter((s) => {
+      const orderDate = normalizeToIsoDate(s.settledAt);
+      if (!orderDate) return false;
+      if (filterMode === 'all') return true;
+      if (filterMode === 'single') return orderDate === targetSingleDate;
+      if (filterMode === 'range') return orderDate >= rangeStartDate && orderDate <= rangeEndDate;
+      return false;
     });
 
+    // Compute list of all dates on disk/memory that have recorded sales for calendar highlighting
+    const ledgerDir = path.join(process.cwd(), 'data', 'daily_ledgers');
+    const recordedDatesSet = new Set<string>();
+    if (fs.existsSync(ledgerDir)) {
+      try {
+        fs.readdirSync(ledgerDir).forEach((f) => {
+          if (f.endsWith('.json')) {
+            recordedDatesSet.add(f.replace('.json', ''));
+          }
+        });
+      } catch {}
+    }
+    allUnifiedSales.forEach((s) => {
+      const d = normalizeToIsoDate(s.settledAt);
+      if (d) recordedDatesSet.add(d);
+    });
+    const recordedDates = Array.from(recordedDatesSet).sort();
+
     // Report 1: Total Sales of the Day
-    const grossSalesPaise = dayOrders.reduce((sum, o) => sum + (o.grandTotalPaise || o.subtotalPaise || 0), 0);
-    const totalOrdersCount = dayOrders.length;
+    let grossSalesPaise = combinedSales.reduce((sum, s) => sum + (s.grandTotalPaise || 0), 0);
+    let totalOrdersCount = combinedSales.length;
     let cashPaise = 0;
     let upiPaise = 0;
     let cardPaise = 0;
 
-    dayOrders.forEach((o) => {
-      const amt = o.grandTotalPaise || o.subtotalPaise || 0;
-      if (o.paymentMode === 'CASH') cashPaise += amt;
-      else if (o.paymentMode === 'UPI') upiPaise += amt;
-      else if (o.paymentMode === 'CARD') cardPaise += amt;
-      else upiPaise += amt; // default
+    combinedSales.forEach((s) => {
+      const amt = s.grandTotalPaise || 0;
+      const mode = (s.paymentMode || 'UPI').toUpperCase();
+      if (mode === 'CASH') cashPaise += amt;
+      else if (mode === 'CARD') cardPaise += amt;
+      else upiPaise += amt;
     });
 
     const aovPaise = totalOrdersCount > 0 ? Math.round(grossSalesPaise / totalOrdersCount) : 0;
@@ -56,7 +189,7 @@ export async function GET(request: Request) {
     const sgstPaise = Math.round(grossSalesPaise * 0.025);
 
     const totalSalesReport = {
-      date: dateQuery,
+      date: dateLabel,
       grossSalesRupees: (grossSalesPaise / 100),
       totalBillsSettled: totalOrdersCount,
       cashRupees: (cashPaise / 100),
@@ -85,54 +218,77 @@ export async function GET(request: Request) {
       });
     });
 
-    // Calculate actual sold quantities today
-    dayOrders.forEach((o) => {
-      (o.items || []).forEach((it) => {
-        if (!itemSalesMap[it.itemName]) {
-          itemSalesMap[it.itemName] = {
-            name: it.itemName,
-            malayalamName: it.itemMalayalamName || '',
+    // Calculate actual sold quantities from all combined sales
+    combinedSales.forEach((s) => {
+      (s.items || []).forEach((it: any) => {
+        const dishName = it.itemName || it.name || 'Dish';
+        const dishPrice = it.pricePaise ? Math.round(it.pricePaise / 100) : (it.rate || 0);
+        const qty = it.quantity || it.qty || 1;
+        const totalLineRupees = it.lineTotalPaise ? Math.round(it.lineTotalPaise / 100) : (it.total || dishPrice * qty);
+
+        if (!itemSalesMap[dishName]) {
+          itemSalesMap[dishName] = {
+            name: dishName,
+            malayalamName: it.itemMalayalamName || it.malayalamName || '',
             category: 'Kerala Specials',
-            priceRupees: Math.round(it.pricePaise / 100),
+            priceRupees: dishPrice,
             soldQty: 0,
             revenueRupees: 0,
             currentStock: 15,
           };
         }
-        itemSalesMap[it.itemName].soldQty += it.quantity;
-        itemSalesMap[it.itemName].revenueRupees += Math.round((it.lineTotalPaise || it.pricePaise * it.quantity) / 100);
+        itemSalesMap[dishName].soldQty += qty;
+        itemSalesMap[dishName].revenueRupees += totalLineRupees;
       });
     });
 
     const menuRemainingStockReport = Object.values(itemSalesMap);
 
-    // Report 3: Daily Table-wise Order and Revenue
-    const tableMap: Record<string, { tableCode: string; displayName: string; ordersCount: number; totalRevenueRupees: number }> = {};
+    // Report 3: Daily Table-wise & Room-wise Order and Revenue
+    const tableMap: Record<string, { tableCode: string; displayName: string; roomName: string; ordersCount: number; totalRevenueRupees: number }> = {};
+    const roomRevenueMap: Record<string, { roomName: string; tablesCount: number; ordersCount: number; totalRevenueRupees: number }> = {};
 
     (db.tables || []).forEach((t) => {
+      const room = t.roomName || 'Dining Area';
       tableMap[t.tableCode] = {
         tableCode: t.tableCode,
         displayName: t.displayName || `Table ${t.tableCode}`,
+        roomName: room,
         ordersCount: 0,
         totalRevenueRupees: 0,
       };
+      if (!roomRevenueMap[room]) {
+        roomRevenueMap[room] = { roomName: room, tablesCount: 0, ordersCount: 0, totalRevenueRupees: 0 };
+      }
+      roomRevenueMap[room].tablesCount += 1;
     });
 
-    dayOrders.forEach((o) => {
-      const code = (o.tableCode || 'T1').toUpperCase();
+    combinedSales.forEach((s) => {
+      const code = (s.tableCode || 'T1').toUpperCase();
+      const tableObj = (db.tables || []).find((t) => t.tableCode.toUpperCase() === code);
+      const room = tableObj?.roomName || s.roomName || 'Dining Area';
+
       if (!tableMap[code]) {
         tableMap[code] = {
           tableCode: code,
-          displayName: o.tableName || `Table ${code}`,
+          displayName: `Table ${code}`,
+          roomName: room,
           ordersCount: 0,
           totalRevenueRupees: 0,
         };
       }
       tableMap[code].ordersCount += 1;
-      tableMap[code].totalRevenueRupees += Math.round((o.grandTotalPaise || o.subtotalPaise || 0) / 100);
+      tableMap[code].totalRevenueRupees += Math.round((s.grandTotalPaise || 0) / 100);
+
+      if (!roomRevenueMap[room]) {
+        roomRevenueMap[room] = { roomName: room, tablesCount: 1, ordersCount: 0, totalRevenueRupees: 0 };
+      }
+      roomRevenueMap[room].ordersCount += 1;
+      roomRevenueMap[room].totalRevenueRupees += Math.round((s.grandTotalPaise || 0) / 100);
     });
 
     const tablewiseReport = Object.values(tableMap);
+    const roomwiseReport = Object.values(roomRevenueMap);
 
     // Report 4: Staff Login Audit
     const staffLoginAuditReport = (db.loginSessions || []).map((s) => ({
@@ -151,151 +307,30 @@ export async function GET(request: Request) {
       staffName: u.fullName || u.username,
       role: u.role,
       station: u.station,
-      loginDate: dateQuery,
+      loginDate: dateLabel,
       loginTime: '08:00 AM',
       status: 'ACTIVE',
     }));
 
     // Report 5: Billing Authorization & Print Audit (Who authorized and printed each bill)
-    const billingAuthorizations = (dayOrders || []).map((o, idx) => ({
-      billNumber: o.customerCode || `INV-${idx + 1001}`,
-      tableCode: o.tableCode || 'T1',
-      grandTotalRupees: Math.round((o.grandTotalPaise || o.subtotalPaise || 0) / 100),
-      paymentMode: o.paymentMode || 'UPI',
-      authorizedByStaffName: o.cashierName || 'Cashier Desk',
-      printedAt: o.paidAt || o.createdAt || new Date().toISOString(),
+    const billingAuthorizations = combinedSales.map((s, idx) => ({
+      billNumber: s.invoiceNumber || s.orderCode || `INV-${idx + 1001}`,
+      tableCode: s.tableCode || 'T1',
+      grandTotalRupees: Math.round((s.grandTotalPaise || 0) / 100),
+      paymentMode: s.paymentMode || 'UPI',
+      authorizedByStaffName: s.cashier || 'Cashier Desk',
+      printedAt: s.settledAt || new Date().toISOString(),
       status: 'PRINTED & AUTHORIZED',
     }));
 
     if (format === 'excel') {
-      let filename = `${dateLabel}-daily-report.xls`;
-      if (reportType === 'sales') filename = `${dateLabel}-sales-report.xls`;
-      else if (reportType === 'menu') filename = `${dateLabel}-menu-stock-report.xls`;
-      else if (reportType === 'tables') filename = `${dateLabel}-table-revenue-report.xls`;
-      else if (reportType === 'staff') filename = `${dateLabel}-staff-audit-report.xls`;
-      else if (reportType === 'billing') filename = `${dateLabel}-billing-auth-report.xls`;
-
-      const includeSales = reportType === 'all' || reportType === 'sales';
-      const includeMenu = reportType === 'all' || reportType === 'menu';
-      const includeTables = reportType === 'all' || reportType === 'tables';
-      const includeStaff = reportType === 'all' || reportType === 'staff';
-      const includeBilling = reportType === 'all' || reportType === 'billing';
-
-      const excelXml = `<?xml version="1.0"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
- 
- ${includeSales ? `<!-- SHEET 1: Total Sales of the Day -->
- <Worksheet ss:Name="Total Sales">
-  <Table>
-   <Row><Cell><Data ss:Type="String">ITHI POORAM - TOTAL SALES OF THE DAY</Data></Cell></Row>
-   <Row><Cell><Data ss:Type="String">Business Date</Data></Cell><Cell><Data ss:Type="String">${totalSalesReport.date}</Data></Cell></Row>
-   <Row><Cell><Data ss:Type="String">Total Bills Settled</Data></Cell><Cell><Data ss:Type="Number">${totalSalesReport.totalBillsSettled}</Data></Cell></Row>
-   <Row><Cell><Data ss:Type="String">Gross Revenue (INR)</Data></Cell><Cell><Data ss:Type="Number">${totalSalesReport.grossSalesRupees}</Data></Cell></Row>
-   <Row><Cell><Data ss:Type="String">Cash Revenue (INR)</Data></Cell><Cell><Data ss:Type="Number">${totalSalesReport.cashRupees}</Data></Cell></Row>
-   <Row><Cell><Data ss:Type="String">UPI Revenue (INR)</Data></Cell><Cell><Data ss:Type="Number">${totalSalesReport.upiRupees}</Data></Cell></Row>
-   <Row><Cell><Data ss:Type="String">Card Revenue (INR)</Data></Cell><Cell><Data ss:Type="Number">${totalSalesReport.cardRupees}</Data></Cell></Row>
-   <Row><Cell><Data ss:Type="String">Average Order Value (INR)</Data></Cell><Cell><Data ss:Type="Number">${totalSalesReport.aovRupees}</Data></Cell></Row>
-   <Row><Cell><Data ss:Type="String">CGST 2.5% (INR)</Data></Cell><Cell><Data ss:Type="Number">${totalSalesReport.cgstRupees}</Data></Cell></Row>
-   <Row><Cell><Data ss:Type="String">SGST 2.5% (INR)</Data></Cell><Cell><Data ss:Type="Number">${totalSalesReport.sgstRupees}</Data></Cell></Row>
-  </Table>
- </Worksheet>` : ''}
-
- ${includeMenu ? `<!-- SHEET 2: Menu of the Day & Remaining Stock -->
- <Worksheet ss:Name="Menu and Stock">
-  <Table>
-   <Row>
-    <Cell><Data ss:Type="String">Item Name</Data></Cell>
-    <Cell><Data ss:Type="String">Malayalam Name</Data></Cell>
-    <Cell><Data ss:Type="String">Category</Data></Cell>
-    <Cell><Data ss:Type="String">Price (INR)</Data></Cell>
-    <Cell><Data ss:Type="String">Sold Quantity</Data></Cell>
-    <Cell><Data ss:Type="String">Remaining Stock</Data></Cell>
-    <Cell><Data ss:Type="String">Total Revenue (INR)</Data></Cell>
-   </Row>
-   ${menuRemainingStockReport.map((m) => `
-   <Row>
-    <Cell><Data ss:Type="String">${m.name}</Data></Cell>
-    <Cell><Data ss:Type="String">${m.malayalamName || ''}</Data></Cell>
-    <Cell><Data ss:Type="String">${m.category}</Data></Cell>
-    <Cell><Data ss:Type="Number">${m.priceRupees}</Data></Cell>
-    <Cell><Data ss:Type="Number">${m.soldQty}</Data></Cell>
-    <Cell><Data ss:Type="String">${m.currentStock}</Data></Cell>
-    <Cell><Data ss:Type="Number">${m.revenueRupees}</Data></Cell>
-   </Row>`).join('')}
-  </Table>
- </Worksheet>` : ''}
-
- ${includeTables ? `<!-- SHEET 3: Table-wise Order and Revenue -->
- <Worksheet ss:Name="Tablewise Revenue">
-  <Table>
-   <Row>
-    <Cell><Data ss:Type="String">Table Code</Data></Cell>
-    <Cell><Data ss:Type="String">Display Name</Data></Cell>
-    <Cell><Data ss:Type="String">Total Orders Served</Data></Cell>
-    <Cell><Data ss:Type="String">Total Revenue (INR)</Data></Cell>
-   </Row>
-   ${tablewiseReport.map((t) => `
-   <Row>
-    <Cell><Data ss:Type="String">${t.tableCode}</Data></Cell>
-    <Cell><Data ss:Type="String">${t.displayName}</Data></Cell>
-    <Cell><Data ss:Type="Number">${t.ordersCount}</Data></Cell>
-    <Cell><Data ss:Type="Number">${t.totalRevenueRupees}</Data></Cell>
-   </Row>`).join('')}
-  </Table>
- </Worksheet>` : ''}
-
- ${includeStaff ? `<!-- SHEET 4: Staff Login Audit -->
- <Worksheet ss:Name="Staff Login Audit">
-  <Table>
-   <Row>
-    <Cell><Data ss:Type="String">Staff Name</Data></Cell>
-    <Cell><Data ss:Type="String">Role</Data></Cell>
-    <Cell><Data ss:Type="String">Assigned Station</Data></Cell>
-    <Cell><Data ss:Type="String">Date</Data></Cell>
-    <Cell><Data ss:Type="String">Login Time</Data></Cell>
-    <Cell><Data ss:Type="String">Status</Data></Cell>
-   </Row>
-   ${fallbackStaffAudit.map((s) => `
-   <Row>
-    <Cell><Data ss:Type="String">${s.staffName}</Data></Cell>
-    <Cell><Data ss:Type="String">${s.role}</Data></Cell>
-    <Cell><Data ss:Type="String">${s.station}</Data></Cell>
-    <Cell><Data ss:Type="String">${s.loginDate}</Data></Cell>
-    <Cell><Data ss:Type="String">${s.loginTime}</Data></Cell>
-    <Cell><Data ss:Type="String">${s.status}</Data></Cell>
-   </Row>`).join('')}
-  </Table>
- </Worksheet>` : ''}
-
- ${includeBilling ? `<!-- SHEET 5: Billing Authorization & Print Report -->
- <Worksheet ss:Name="Billing Authorization">
-  <Table>
-   <Row>
-    <Cell><Data ss:Type="String">Bill / Invoice Number</Data></Cell>
-    <Cell><Data ss:Type="String">Table</Data></Cell>
-    <Cell><Data ss:Type="String">Amount (INR)</Data></Cell>
-    <Cell><Data ss:Type="String">Payment Mode</Data></Cell>
-    <Cell><Data ss:Type="String">Authorized &amp; Printed By Staff</Data></Cell>
-    <Cell><Data ss:Type="String">Printed Timestamp</Data></Cell>
-    <Cell><Data ss:Type="String">Print Status</Data></Cell>
-   </Row>
-   ${billingAuthorizations.map((b) => `
-   <Row>
-    <Cell><Data ss:Type="String">${b.billNumber}</Data></Cell>
-    <Cell><Data ss:Type="String">${b.tableCode}</Data></Cell>
-    <Cell><Data ss:Type="Number">${b.grandTotalRupees}</Data></Cell>
-    <Cell><Data ss:Type="String">${b.paymentMode}</Data></Cell>
-    <Cell><Data ss:Type="String">${b.authorizedByStaffName}</Data></Cell>
-    <Cell><Data ss:Type="String">${b.printedAt}</Data></Cell>
-    <Cell><Data ss:Type="String">${b.status}</Data></Cell>
-   </Row>`).join('')}
-  </Table>
- </Worksheet>` : ''}
-</Workbook>`;
+      const filename = `IthiPooram_MasterDatabase_${dateLabel}.xls`;
+      const excelXml = generateUnifiedMasterDatabaseXml(
+        targetSingleDate || dateLabel,
+        combinedSales,
+        db.tables,
+        db.staffUsers
+      );
 
       return new NextResponse(excelXml, {
         headers: {
@@ -306,16 +341,19 @@ export async function GET(request: Request) {
       });
     }
 
-    // Default JSON response containing all 5 reports
+    // Default JSON response containing all 5 reports + recordedDates for calendar
     return NextResponse.json(
       {
         success: true,
-        date: dateQuery,
-        folderName: `IthiPooram_Reports_${dateQuery}`,
+        date: dateLabel,
+        folderName: `IthiPooram_Reports_${dateLabel}`,
+        recordedDates,
+        salesData: combinedSales,
         reports: {
           totalSales: totalSalesReport,
           menuAndRemainingStock: menuRemainingStockReport,
           tablewiseRevenue: tablewiseReport,
+          roomwiseRevenue: roomwiseReport,
           staffLoginAudit: fallbackStaffAudit,
           billingAuthorization: billingAuthorizations,
         },

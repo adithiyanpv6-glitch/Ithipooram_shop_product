@@ -200,7 +200,7 @@ export function generateMasterStaffExcelXml(staffList: StaffRecord[] = DEFAULT_M
    <!-- Row 3: Generation Metadata -->
    <Row ss:Height="22">
     <Cell ss:MergeAcross="8" ss:StyleID="MetaBar">
-     <Data ss:Type="String">System Sync: Live Linked to POS Gateway • Generated on: ${currentDate} at ${currentTime} • Telegram Archive: @IthiPooram_Group</Data>
+     <Data ss:Type="String">System Sync: Live Linked to POS Gateway • Generated on: ${currentDate} at ${currentTime} • Storage: Local Laptop SSD Master Database</Data>
     </Cell>
    </Row>
 
@@ -251,7 +251,7 @@ export function generateMasterStaffExcelXml(staffList: StaffRecord[] = DEFAULT_M
    <!-- Confidentiality Notice -->
    <Row ss:Height="28">
     <Cell ss:MergeAcross="8" ss:StyleID="FooterNotice">
-     <Data ss:Type="String">CONFIDENTIAL &amp; PROPRIETARY: This master credentials database is protected. Admin Master PIN [1111] possesses emergency override permissions across all tablet terminals. Keep this document stored securely in the private Telegram vault.</Data>
+     <Data ss:Type="String">CONFIDENTIAL &amp; PROPRIETARY: This master credentials database is protected. Admin Master PIN [1111] possesses emergency override permissions across all tablet terminals. Keep this document stored securely on the dedicated shop terminal SSD.</Data>
     </Cell>
    </Row>
   </Table>
@@ -373,65 +373,3 @@ function escapeXml(unsafe: string): string {
   });
 }
 
-/**
- * Dispatches the Master Excel credentials file to the designated private Telegram group
- */
-export async function dispatchMasterDatabaseToTelegram(
-  telegramBotToken?: string,
-  chatId?: string,
-  staffList?: StaffRecord[]
-): Promise<{ success: boolean; message: string }> {
-  const list = staffList || DEFAULT_MASTER_STAFF_DATABASE;
-  const xmlContent = generateMasterStaffExcelXml(list);
-
-  // If token is provided, send through official Telegram Bot API
-  if (telegramBotToken && chatId) {
-    try {
-      const cleanToken = telegramBotToken.trim();
-      const cleanChatId = chatId.trim();
-      
-      const boundary = `----TelegramBoundary${Date.now()}`;
-      const filename = `IthiPooram_Master_Staff_Database_${new Date().toISOString().slice(0, 10)}.xls`;
-      
-      // Send document via Telegram API multipart/form-data
-      const formDataParts = [
-        `--${boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n${cleanChatId}\r\n`,
-        `--${boundary}\r\nContent-Disposition: form-data; name="caption"\r\n\r\n🔒 ITHI POORAM • Master Staff Credentials Database\nUpdated: ${new Date().toLocaleString()}\nStaff Count: ${list.length} accounts\nStatus: Password Protected Vault Archive\r\n`,
-        `--${boundary}\r\nContent-Disposition: form-data; name="document"; filename="${filename}"\r\nContent-Type: application/vnd.ms-excel\r\n\r\n${xmlContent}\r\n`,
-        `--${boundary}--\r\n`,
-      ];
-
-      const res = await fetch(`https://api.telegram.org/bot${cleanToken}/sendDocument`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': `multipart/form-data; boundary=${boundary}`,
-        },
-        body: formDataParts.join(''),
-      });
-
-      const data = await res.json();
-      if (data.ok) {
-        return {
-          success: true,
-          message: `Master Excel Database successfully uploaded to Telegram Group! (Message ID: ${data.result?.message_id})`,
-        };
-      } else {
-        return {
-          success: false,
-          message: data.description || 'Telegram API returned an error.',
-        };
-      }
-    } catch (e: any) {
-      return {
-        success: false,
-        message: e.message || 'Network error communicating with Telegram API.',
-      };
-    }
-  }
-
-  // Fallback direct download
-  return {
-    success: true,
-    message: 'Master Excel Database compiled and ready for local save / Telegram upload.',
-  };
-}

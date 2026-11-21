@@ -36,12 +36,16 @@ export default function ReportsPage() {
   const [paymentFilter, setPaymentFilter] = useState<string>('All');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Date Picker Modal Dropdown State (Matching uploaded image)
+  // Full Calendar & Date Filter State
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
-  const [dateFilterLabel, setDateFilterLabel] = useState<string>('Last 60 mins');
-  const [selectedDate, setSelectedDate] = useState<string>('04/11/2026');
-  const [currentMonth, setCurrentMonth] = useState<string>('November 2026');
-  const [selectedDay, setSelectedDay] = useState<number>(4);
+  const now = useMemo(() => new Date(), []);
+  const [calendarYear, setCalendarYear] = useState<number>(now.getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState<number>(now.getMonth());
+  const [selectedIsoDate, setSelectedIsoDate] = useState<string>(
+    now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+  );
+  const [dateFilterLabel, setDateFilterLabel] = useState<string>('Today');
+  const [activePreset, setActivePreset] = useState<string>('Today');
 
   // Selected bill for receipt preview modal
   const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
@@ -51,45 +55,113 @@ export default function ReportsPage() {
   const [isBluetoothPrintingReport, setIsBluetoothPrintingReport] = useState(false);
   const [reportBtStatus, setReportBtStatus] = useState<string | null>(null);
 
+  // Dynamically resolve target date for API & Excel download
+  const resolvedDateParam = useMemo(() => {
+    if (activePreset === 'Today') return 'today';
+    if (activePreset === 'Yesterday') return 'yesterday';
+    if (activePreset === 'Last 7 days') return '7days';
+    if (activePreset === 'Last 30 days') return '30days';
+    if (activePreset === 'This Month') return 'month';
+    if (activePreset === 'All Time') return 'all';
+    return selectedIsoDate || 'today';
+  }, [activePreset, selectedIsoDate]);
+
+  const handlePrevMonth = () => {
+    if (calendarMonth === 0) {
+      setCalendarMonth(11);
+      setCalendarYear((y) => y - 1);
+    } else {
+      setCalendarMonth((m) => m - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (calendarMonth === 11) {
+      setCalendarMonth(0);
+      setCalendarYear((y) => y + 1);
+    } else {
+      setCalendarMonth((m) => m + 1);
+    }
+  };
+
+  const currentMonthLabel = useMemo(() => {
+    return new Date(calendarYear, calendarMonth, 1).toLocaleDateString('en-US', {
+      month: 'long',
+      year: 'numeric',
+    });
+  }, [calendarYear, calendarMonth]);
+
+  const monthGrid = useMemo(() => {
+    const firstDayIndex = new Date(calendarYear, calendarMonth, 1).getDay(); // 0 = Sun
+    const totalDays = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+    return { firstDayIndex, totalDays };
+  }, [calendarYear, calendarMonth]);
+
+  const handleSelectDay = (day: number) => {
+    const dObj = new Date(calendarYear, calendarMonth, day);
+    const iso = dObj.toLocaleDateString('en-CA');
+    const label = dObj.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+    setSelectedIsoDate(iso);
+    setActivePreset('Custom');
+    setDateFilterLabel(label);
+    setIsDatePickerOpen(false);
+  };
+
+  const handleNativeDateChange = (val: string) => {
+    if (!val) return;
+    setSelectedIsoDate(val);
+    setActivePreset('Custom');
+    const dObj = new Date(val + 'T00:00:00');
+    setDateFilterLabel(dObj.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }));
+  };
+
+  const handleSelectPreset = (preset: string) => {
+    setActivePreset(preset);
+    const today = new Date();
+    if (preset === 'Today') {
+      setSelectedIsoDate(today.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
+      setDateFilterLabel('Today');
+    } else if (preset === 'Yesterday') {
+      const yd = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+      setSelectedIsoDate(yd.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
+      setDateFilterLabel('Yesterday');
+    } else if (preset === 'Last 7 days') {
+      setDateFilterLabel('Last 7 Days');
+    } else if (preset === 'Last 30 days') {
+      setDateFilterLabel('Last 30 Days');
+    } else if (preset === 'This Month') {
+      setDateFilterLabel(today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }));
+    } else if (preset === 'All Time') {
+      setDateFilterLabel('All Time History');
+    }
+    if (preset !== 'Custom') {
+      setIsDatePickerOpen(false);
+    }
+  };
+
   const loadReports = async () => {
     try {
       setLoading(true);
-      const res = await apiRequest('/admin/overview?range=today');
+      const endpoint = `/api/admin/overview?range=${encodeURIComponent(resolvedDateParam)}&date=${encodeURIComponent(resolvedDateParam)}`;
+      const res = await apiRequest(endpoint);
       setOverviewData(res);
 
-      // Fetch sales list
-      const salesRes = await fetch('/api/admin/overview?range=today');
-      if (salesRes.ok) {
-        const json = await salesRes.json();
-        if (json && Array.isArray(json.sales) && json.sales.length > 0) {
-          setSalesData(json.sales);
-        } else {
-          setSalesData([
-            {
-              id: 'ord-01',
-              orderNumber: '#4',
-              type: 'Dine-In',
-              date: '04 NOV 2026',
-              items: 'Aavoli fry X 11.0',
-              amountPaise: 110000,
-              paymentType: 'Cash',
-              tableCode: 'T1',
-            },
-            {
-              id: 'ord-02',
-              orderNumber: '#3',
-              type: 'Dine-In',
-              date: '04 NOV 2026',
-              items: 'Aavoli fry X 2.0',
-              amountPaise: 20000,
-              paymentType: 'Cash',
-              tableCode: 'T2',
-            },
-          ]);
-        }
+      if (res && Array.isArray(res.sales)) {
+        setSalesData(res.sales);
+      } else {
+        setSalesData([]);
       }
     } catch (e) {
       console.error('Failed to load reports:', e);
+      setSalesData([]);
     } finally {
       setLoading(false);
     }
@@ -102,7 +174,7 @@ export default function ReportsPage() {
       return;
     }
     loadReports();
-  }, [router]);
+  }, [router, dateFilterLabel, activePreset, selectedIsoDate, resolvedDateParam]);
 
   const handleSignOut = () => {
     if (typeof window !== 'undefined') {
@@ -114,20 +186,20 @@ export default function ReportsPage() {
 
   const formatRupees = (paise: number = 0) => `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 0 })}`;
 
-  const totalSalesPaise = overviewData?.kpis?.grossSalesPaise || 130000;
-  const totalOrdersCount = overviewData?.kpis?.paidOrdersCount || salesData.length;
+  const totalSalesPaise = overviewData?.kpis?.grossSalesPaise ?? 0;
+  const totalOrdersCount = overviewData?.kpis?.paidOrdersCount ?? salesData.length;
 
   const cashTotalPaise = useMemo(() => {
     return salesData
       .filter((s) => (s.paymentType || s.paymentMode || '').toUpperCase() === 'CASH')
-      .reduce((sum, s) => sum + (s.amountPaise || s.grandTotalPaise || 0), 0) || Math.round(totalSalesPaise * 0.6);
-  }, [salesData, totalSalesPaise]);
+      .reduce((sum, s) => sum + (s.amountPaise || s.grandTotalPaise || 0), 0);
+  }, [salesData]);
 
   const upiTotalPaise = useMemo(() => {
     return salesData
       .filter((s) => (s.paymentType || s.paymentMode || '').toUpperCase() === 'UPI')
-      .reduce((sum, s) => sum + (s.amountPaise || s.grandTotalPaise || 0), 0) || Math.round(totalSalesPaise * 0.4);
-  }, [salesData, totalSalesPaise]);
+      .reduce((sum, s) => sum + (s.amountPaise || s.grandTotalPaise || 0), 0);
+  }, [salesData]);
 
   // Direct Bluetooth Print for 58mm Daily Report Slip
   const handlePrintReportToBluetooth = async () => {
@@ -234,18 +306,6 @@ export default function ReportsPage() {
               <span>Reports</span>
             </div>
             <ChevronRight className="w-3.5 h-3.5 text-zinc-600" />
-          </Link>
-
-          {/* Kitchen Display (KDS) */}
-          <Link
-            href="/kitchen"
-            className="flex items-center justify-between px-3.5 py-3 rounded-2xl text-zinc-400 hover:bg-zinc-900 hover:text-white font-bold text-sm transition"
-          >
-            <div className="flex items-center space-x-3">
-              <ChefHat className="w-4 h-4 text-orange-400" />
-              <span>Kitchen (KDS)</span>
-            </div>
-            <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />
           </Link>
 
           <Link
@@ -367,13 +427,15 @@ export default function ReportsPage() {
               <span>A4 / PDF</span>
             </button>
 
-            {/* Excel (.xls) Download */}
+            {/* Excel (.xls) Download - Dynamically bound to currently filtered date or range */}
             <a
-              href="/api/admin/overview?range=today&format=xls"
-              className="px-2.5 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-black text-xs uppercase tracking-wider shadow-xs transition"
-              title="Download Excel Report"
+              href={`/api/admin/daily-reports?date=${encodeURIComponent(resolvedDateParam)}&format=excel`}
+              download={`IthiPooram_Report_${dateFilterLabel.replace(/[\s/]+/g, '_')}.xls`}
+              className="px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-black text-xs uppercase tracking-wider shadow-xs transition flex items-center space-x-1 cursor-pointer"
+              title={`Download Multi-Sheet Excel Report for ${dateFilterLabel}`}
             >
-              xls
+              <FileText className="w-3.5 h-3.5 text-emerald-200" />
+              <span>xls</span>
             </a>
           </div>
         </div>
@@ -381,35 +443,37 @@ export default function ReportsPage() {
         {/* Content View with Full Smooth Scrolling */}
         <div className="flex-1 p-4 sm:p-6 pb-36 sm:pb-32 overflow-y-auto space-y-5">
           
-          {/* Filter Pills Bar: Date Dropdown, Payment Type, Orders */}
+          {/* Filter Pills Bar: Date Dropdown, Native Calendar Input, Payment Type */}
           <div className="flex flex-wrap items-center gap-2.5 relative">
             
-            {/* 1. Date Option Button (Triggers Calendar Modal matching image) */}
+            {/* 1. Date Option Button (Triggers Interactive Calendar Modal) */}
             <div className="relative">
               <button
+                type="button"
                 onClick={() => setIsDatePickerOpen(!isDatePickerOpen)}
-                className="px-4 py-2 rounded-xl bg-white border border-blue-500 text-blue-600 text-xs font-bold shadow-xs flex items-center space-x-2 transition cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-white border-2 border-blue-500 text-blue-600 text-xs font-black shadow-xs flex items-center space-x-2 transition cursor-pointer hover:bg-blue-50/50"
               >
-                <CalendarIcon className="w-3.5 h-3.5" />
+                <CalendarIcon className="w-4 h-4 text-blue-600" />
                 <span>{dateFilterLabel}</span>
-                <ChevronDown className="w-3.5 h-3.5" />
+                <ChevronDown className="w-3.5 h-3.5 text-blue-500" />
               </button>
 
-              {/* DATE PICKER CALENDAR MODAL (Pixel-perfect copy of uploaded reference) */}
+              {/* DATE PICKER CALENDAR MODAL */}
               {isDatePickerOpen && (
                 <div className="absolute top-12 left-0 z-50 bg-white rounded-3xl shadow-2xl border border-zinc-200 p-5 w-80 sm:w-96 text-xs text-black animate-in zoom-in-95 duration-100">
                   <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
                     <span className="font-extrabold uppercase tracking-wider text-zinc-400 text-[10px]">
-                      DATE
+                      CHOOSE BUSINESS DATE
                     </span>
                     <button 
+                      type="button"
                       onClick={() => {
-                        setDateFilterLabel('Last 60 mins');
+                        handleSelectPreset('Today');
                         setIsDatePickerOpen(false);
                       }}
                       className="text-blue-600 font-bold hover:underline"
                     >
-                      Clear
+                      Reset to Today
                     </button>
                   </div>
 
@@ -420,25 +484,21 @@ export default function ReportsPage() {
                         QUICK SELECT
                       </span>
                       {[
-                        'Last 60 mins',
-                        'All Time',
                         'Today',
                         'Yesterday',
                         'Last 7 days',
                         'Last 30 days',
                         'This Month',
-                        'Custom',
+                        'All Time',
                       ].map((preset) => (
                         <button
                           key={preset}
-                          onClick={() => {
-                            setDateFilterLabel(preset);
-                            if (preset !== 'Custom') setIsDatePickerOpen(false);
-                          }}
+                          type="button"
+                          onClick={() => handleSelectPreset(preset)}
                           className={`w-full text-left px-2 py-1.5 rounded-xl text-[11px] font-bold transition cursor-pointer ${
-                            dateFilterLabel === preset
-                              ? 'bg-blue-50 text-blue-600'
-                              : 'text-zinc-700 hover:bg-zinc-50'
+                            activePreset === preset
+                              ? 'bg-blue-600 text-white shadow-xs'
+                              : 'text-zinc-700 hover:bg-zinc-100'
                           }`}
                         >
                           {preset}
@@ -446,56 +506,76 @@ export default function ReportsPage() {
                       ))}
                     </div>
 
-                    {/* Right Calendar Column */}
+                    {/* Right Interactive Calendar Column */}
                     <div className="col-span-8 space-y-3">
-                      {/* Date Input Box */}
-                      <div className="p-2.5 rounded-xl border-2 border-blue-500 bg-white">
-                        <span className="text-[9px] font-bold text-blue-600 uppercase block">Date</span>
-                        <input
-                          type="text"
-                          value={selectedDate}
-                          onChange={(e) => setSelectedDate(e.target.value)}
-                          className="font-bold text-black text-xs outline-none w-full bg-transparent"
-                        />
+                      {/* Active Date Label Display */}
+                      <div className="p-2.5 rounded-xl border-2 border-blue-500 bg-blue-50/40">
+                        <span className="text-[9px] font-bold text-blue-600 uppercase block">Selected Date</span>
+                        <span className="font-extrabold text-black text-xs block">
+                          {selectedIsoDate}
+                        </span>
                       </div>
 
-                      {/* Month Switcher */}
-                      <div className="flex items-center justify-between font-bold text-xs">
-                        <button className="p-1 text-zinc-400 hover:text-black">
+                      {/* Month Switcher with Real Year & Month state */}
+                      <div className="flex items-center justify-between font-extrabold text-xs px-1">
+                        <button 
+                          type="button"
+                          onClick={handlePrevMonth}
+                          className="p-1.5 text-zinc-600 hover:text-black hover:bg-zinc-100 rounded-lg cursor-pointer"
+                          title="Previous Month"
+                        >
                           <ChevronLeft className="w-4 h-4" />
                         </button>
-                        <span>{currentMonth}</span>
-                        <button className="p-1 text-zinc-400 hover:text-black">
+                        <span className="text-black font-black">{currentMonthLabel}</span>
+                        <button 
+                          type="button"
+                          onClick={handleNextMonth}
+                          className="p-1.5 text-zinc-600 hover:text-black hover:bg-zinc-100 rounded-lg cursor-pointer"
+                          title="Next Month"
+                        >
                           <ChevronRight className="w-4 h-4" />
                         </button>
                       </div>
 
                       {/* Calendar Day Grid */}
                       <div className="grid grid-cols-7 gap-1 text-center text-[10px]">
-                        <span className="font-bold text-zinc-400">SU</span>
-                        <span className="font-bold text-zinc-400">MO</span>
-                        <span className="font-bold text-zinc-400">TU</span>
-                        <span className="font-bold text-zinc-400">WE</span>
-                        <span className="font-bold text-zinc-400">TH</span>
-                        <span className="font-bold text-zinc-400">FR</span>
-                        <span className="font-bold text-zinc-400">SA</span>
+                        <span className="font-black text-zinc-400 py-1">SU</span>
+                        <span className="font-black text-zinc-400 py-1">MO</span>
+                        <span className="font-black text-zinc-400 py-1">TU</span>
+                        <span className="font-black text-zinc-400 py-1">WE</span>
+                        <span className="font-black text-zinc-400 py-1">TH</span>
+                        <span className="font-black text-zinc-400 py-1">FR</span>
+                        <span className="font-black text-zinc-400 py-1">SA</span>
 
-                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30].map((d) => (
-                          <button
-                            key={d}
-                            onClick={() => {
-                              setSelectedDay(d);
-                              setSelectedDate(`${String(d).padStart(2, '0')}/11/2026`);
-                            }}
-                            className={`h-6 rounded-lg font-bold transition flex items-center justify-center ${
-                              selectedDay === d
-                                ? 'bg-blue-600 text-white font-extrabold'
-                                : 'text-zinc-700 hover:bg-zinc-100'
-                            }`}
-                          >
-                            {d}
-                          </button>
+                        {/* Leading Empty Cells */}
+                        {Array.from({ length: monthGrid.firstDayIndex }).map((_, i) => (
+                          <div key={`empty-${i}`} className="h-7" />
                         ))}
+
+                        {/* Actual Month Days */}
+                        {Array.from({ length: monthGrid.totalDays }).map((_, i) => {
+                          const d = i + 1;
+                          const thisIso = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                          const isSelected = selectedIsoDate === thisIso && activePreset === 'Custom';
+                          const isToday = thisIso === now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+                          return (
+                            <button
+                              key={`day-${d}`}
+                              type="button"
+                              onClick={() => handleSelectDay(d)}
+                              className={`h-7 rounded-lg font-bold text-xs transition flex items-center justify-center cursor-pointer ${
+                                isSelected
+                                  ? 'bg-blue-600 text-white font-extrabold shadow-sm'
+                                  : isToday
+                                  ? 'border border-blue-500 text-blue-600 font-extrabold hover:bg-blue-50'
+                                  : 'text-zinc-700 hover:bg-zinc-100'
+                              }`}
+                            >
+                              {d}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
@@ -503,20 +583,27 @@ export default function ReportsPage() {
                   {/* Actions */}
                   <div className="flex items-center justify-end space-x-2 pt-2 border-t border-zinc-100">
                     <button
+                      type="button"
                       onClick={() => setIsDatePickerOpen(false)}
-                      className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-600 hover:bg-zinc-100"
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-600 hover:bg-zinc-100 cursor-pointer"
                     >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => setIsDatePickerOpen(false)}
-                      className="px-4 py-2 rounded-xl text-xs font-bold bg-zinc-200 text-zinc-500 hover:bg-black hover:text-white transition"
-                    >
-                      Apply Changes
+                      Close
                     </button>
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Direct Native Date Calendar Input */}
+            <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-white border border-zinc-200 text-xs font-bold text-black shadow-xs">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-extrabold">Jump to Date:</span>
+              <input
+                type="date"
+                value={selectedIsoDate}
+                onChange={(e) => handleNativeDateChange(e.target.value)}
+                className="bg-transparent font-bold text-xs text-black cursor-pointer outline-none"
+                title="Pick any date from system calendar"
+              />
             </div>
 
             {/* 2. Payment Type Dropdown */}
@@ -599,39 +686,51 @@ export default function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100">
-                  {salesData.map((s: any, idx: number) => (
-                    <tr key={s.id || idx} className="hover:bg-zinc-50/70 transition">
-                      <td className="py-3.5 px-4 font-mono font-black text-black">
-                        {s.orderNumber || `#${idx + 1}`}
-                      </td>
-                      <td className="py-3.5 px-4 font-semibold text-zinc-600">
-                        {s.type || 'Dine-In'}
-                      </td>
-                      <td className="py-3.5 px-4 font-semibold text-zinc-600">
-                        {s.date || '04 NOV 2026'}
-                      </td>
-                      <td className="py-3.5 px-4 font-extrabold text-black">
-                        {s.items || 'Kerala Seafood Specials'}
-                      </td>
-                      <td className="py-3.5 px-4 font-mono font-extrabold text-black text-sm">
-                        {formatRupees(s.amountPaise || s.grandTotalPaise || 120000)}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="px-2.5 py-1 rounded-full bg-zinc-100 border border-zinc-200 font-bold text-[10px] text-zinc-800">
-                          {s.paymentType || s.paymentMode || 'Cash'}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <button
-                          onClick={() => setSelectedReceipt(s)}
-                          className="p-1.5 rounded-lg text-zinc-500 hover:text-black hover:bg-zinc-100 transition"
-                          title="Print / View Minimal Bill"
-                        >
-                          <Printer className="w-4 h-4" />
-                        </button>
+                  {salesData.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-10 px-4 text-center text-zinc-400">
+                        <FileText className="w-8 h-8 mx-auto text-zinc-300 mb-2" />
+                        <p className="font-black text-sm text-zinc-700">No settled orders found for {dateFilterLabel}</p>
+                        <p className="text-xs text-zinc-400 mt-1">
+                          Bills settled in the terminal for this date will appear here accurately.
+                        </p>
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    salesData.map((s: any, idx: number) => (
+                      <tr key={s.id || idx} className="hover:bg-zinc-50/70 transition">
+                        <td className="py-3.5 px-4 font-mono font-black text-black">
+                          {s.orderNumber || `#${idx + 1}`}
+                        </td>
+                        <td className="py-3.5 px-4 font-semibold text-zinc-600">
+                          {s.type || 'Dine-In'}
+                        </td>
+                        <td className="py-3.5 px-4 font-semibold text-zinc-600">
+                          {s.date || new Date().toLocaleDateString('en-IN')}
+                        </td>
+                        <td className="py-3.5 px-4 font-extrabold text-black">
+                          {s.items || 'Dine-In Order'}
+                        </td>
+                        <td className="py-3.5 px-4 font-mono font-extrabold text-black text-sm">
+                          {formatRupees(s.amountPaise || s.grandTotalPaise || 0)}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className="px-2.5 py-1 rounded-full bg-zinc-100 border border-zinc-200 font-bold text-[10px] text-zinc-800">
+                            {s.paymentType || s.paymentMode || 'Cash'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <button
+                            onClick={() => setSelectedReceipt(s)}
+                            className="p-1.5 rounded-lg text-zinc-500 hover:text-black hover:bg-zinc-100 transition"
+                            title="Print / View Minimal Bill"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

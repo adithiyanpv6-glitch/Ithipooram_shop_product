@@ -1,0 +1,53 @@
+=========================================================================
+          ITHI POORAM (ഇത്തിപ്പൂരം) - FINAL SHOP DELIVERY DAY SETUP
+=========================================================================
+
+NOTE FOR DEVELOPER:
+Everything is pre-built, tested, and ready on this laptop.
+When delivering this laptop to the restaurant, follow these 5 quick steps:
+
+-------------------------------------------------------------------------
+STEP 1: PERMANENT CLOUDFLARE WORKER DEPLOYMENT (30 SECONDS)
+-------------------------------------------------------------------------
+1. Connect laptop to shop Wi-Fi / Internet.
+2. Ask the restaurant owner to log in (or create a free Cloudflare account 
+   with their shop email).
+3. Double-click on Desktop:
+   --> DEPLOY_PERMANENT_QR_WORKER.bat
+4. Chrome will open. Click 'Allow' to authorize.
+5. It will deploy their permanent customer QR URL (*.workers.dev).
+6. Copy that URL into: data\cloudflare_worker_url.txt
+
+-------------------------------------------------------------------------
+STEP 2: PRINT TABLE QR STICKERS (ONE-TIME FOREVER)
+-------------------------------------------------------------------------
+1. Open http://localhost:3000/qr on this laptop.
+2. The Table QR codes will now be generated with the permanent URL.
+3. Print table QR stickers once. Stick them on dining tables.
+   They will NEVER expire or change!
+
+-------------------------------------------------------------------------
+STEP 3: CONNECT STAFF PHONES (CASHIER & KITCHEN)
+-------------------------------------------------------------------------
+1. Connect Cashier phone and Kitchen tablet to:
+   Wi-Fi Name:  IthiPooram-POS
+   Password:    ithipooram123
+2. Open links in Chrome:
+   - Cashier Billing: http://192.168.137.1:3000/billing
+   - Kitchen Display: http://192.168.137.1:3000/kitchen
+3. In Chrome, tap 3 dots -> 'Add to Home screen' (Installs as app).
+
+-------------------------------------------------------------------------
+STEP 4: SEZNIK 58mm BLUETOOTH PRINTER
+-------------------------------------------------------------------------
+1. Turn on SEZNIK printer.
+2. In Billing screen (/billing), tap the Printer icon in the top header.
+3. Pair the SEZNIK printer. Receipts print automatically!
+
+-------------------------------------------------------------------------
+STEP 5: DAILY RESTAURANT ROUTINE FOR STAFF
+-------------------------------------------------------------------------
+Every morning when opening the restaurant:
+1. Turn on laptop and double-click: START_ITHIPOORAM_POS.bat
+2. Close laptop lid. It will stay running 24/7 without sleeping!
+=========================================================================

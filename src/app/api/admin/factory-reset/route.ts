@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db, refreshTableSummaries, persistDb } from '@/lib/serverDb';
+import { db, refreshTableSummaries, persistDb, verifyMasterPin } from '@/lib/serverDb';
 import fs from 'fs';
 import path from 'path';
 
@@ -18,10 +18,10 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { adminPin } = body;
 
-    // Strict Admin Security Verification
-    if (!adminPin || adminPin !== '5566') {
+    // Strict Admin Security Verification using Master PIN from master database
+    if (!adminPin || !verifyMasterPin(adminPin)) {
       return NextResponse.json(
-        { error: 'Unauthorized. Invalid Admin PIN. Only the primary administrator can perform a factory reset.' },
+        { error: 'Unauthorized. Invalid Master Security PIN. Only the authorized administrator can perform a factory reset.' },
         { status: 403, headers: corsHeaders }
       );
     }

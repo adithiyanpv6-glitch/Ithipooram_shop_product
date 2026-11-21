@@ -19,7 +19,7 @@ export function getCurrentUser() {
   return user ? JSON.parse(user) : null;
 }
 
-// In-browser fallback state store for instant Vercel preview (starts empty until user configures tables/dishes)
+// In-browser fallback state store
 let memoryTables: any[] = [];
 let memoryOrders: Record<string, any[]> = {};
 let memoryMenu: any[] = [];
@@ -46,7 +46,7 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
     // Continue to fallback if network or fetch throws
   }
 
-  // --- Fallback in-memory handler for standalone Vercel preview ---
+  // --- Fallback in-memory handler ---
   await new Promise((r) => setTimeout(r, 60)); // Simulate micro-delay
 
   if (endpoint === '/tables' || endpoint.startsWith('/tables?')) {
@@ -85,8 +85,8 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
   if (endpoint.startsWith('/billing/orders/') && endpoint.endsWith('/confirm-payment')) {
     const orderId = endpoint.split('/')[3];
     const body = JSON.parse(options.body as string);
-    const pin = body.cashierPin;
-    if (pin !== '5566' && pin !== '7788' && pin !== '1122' && pin !== '3344') {
+    const pin = body.cashierPin || body.pin;
+    if (!pin || pin.length < 4) {
       throw new Error('Invalid Cashier PIN. Verification failed.');
     }
 
@@ -105,43 +105,58 @@ export async function apiRequest<T = any>(endpoint: string, options: RequestInit
           }
         }
 
-        const invoiceNumber = `INV-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-0001`;
-        const thermalReceipt = `--------------------------------
+        const d = new Date();
+        const yyyymmdd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+        const invoiceNumber = `${yyyymmdd}-001`;
+        const dateStr = d.toLocaleDateString('en-IN');
+        const timeStr = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+        const thermalReceipt = `================================
           ഇത്തിപ്പൂരം
           ITHI POORAM
-    Kerala Lunch & Seafood
-    Vanchiyoor, Trivandrum
-      Ph: +91 471 233 4567
---------------------------------
+     Vanchiyoor, Trivandrum
+================================
 Inv: ${invoiceNumber}
-Table: ${tCode}   Ref: ${order.customerCode}
-Time: ${new Date().toLocaleTimeString()}
-Cashier: Counter 1
+Date: ${dateStr}  Time: ${timeStr}
+Table: ${tCode}
+Cashier: Counter Cashier
 --------------------------------
 ITEM             QTY  RATE TOTAL
 --------------------------------
 ${order.items.map((i: any) => {
-  const name = (i.itemNameSnapshot || '').padEnd(16).substring(0, 16);
+  const name = (i.itemNameSnapshot || i.itemName || i.name || '').padEnd(16).substring(0, 16);
   const qty = String(i.quantity).padStart(3);
-  const rate = String(Math.round(i.itemPriceSnapshotPaise / 100)).padStart(5);
-  const tot = String(Math.round(i.lineTotalPaise / 100)).padStart(6);
+  const rate = String(Math.round((i.itemPriceSnapshotPaise || i.pricePaise || 0) / 100)).padStart(5);
+  const tot = String(Math.round((i.lineTotalPaise || 0) / 100)).padStart(5);
   return `${name} ${qty} ${rate} ${tot}`;
 }).join('\n')}
 --------------------------------
-GRAND TOTAL:           ₹${(order.grandTotalPaise / 100).toFixed(2)}
-Payment: ${body.paymentMode}
---------------------------------
+GRAND TOTAL:           ₹${(order.grandTotalPaise / 100).toFixed(2).padStart(8)}
+Payment: [${(body.paymentMode || 'CASH').toUpperCase()}]
+================================
       നന്ദി! വീണ്ടും വരിക
-      Thank You! Visit Again
---------------------------------`;
+     Thank You! Visit Again
+================================`;
         return {
           message: 'Payment confirmed and invoice created.',
           order,
           invoice: {
             id: 'inv-demo-1',
             invoiceNumber,
+            customerCode: order.customerCode,
+            tableCode: tCode,
+            dateStr,
+            timeStr,
+            cashierName: 'Counter Cashier',
+            items: order.items.map((i: any) => ({
+              name: i.itemNameSnapshot || i.itemName || i.name,
+              qty: i.quantity,
+              rate: Math.round((i.itemPriceSnapshotPaise || i.pricePaise || 0) / 100),
+              total: Math.round((i.lineTotalPaise || 0) / 100),
+            })),
             grandTotalPaise: order.grandTotalPaise,
+            paymentMode: body.paymentMode || 'CASH',
             printStatus: 'PRINTED',
+            thermalReceipt,
           },
           printerStatus: 'SUCCESS',
           thermalReceipt,

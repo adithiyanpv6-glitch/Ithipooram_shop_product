@@ -1,0 +1,11 @@
+﻿name = "ithipooram-order"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+AUTH_SECRET = "ithipooram_secret_pos_2026"
+
+[[kv_namespaces]]
+binding = "ITHIPOORAM_CONFIG"
+id = "f69d988213be4137a41eb858de2e0d7e"
+

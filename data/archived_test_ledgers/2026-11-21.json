@@ -1,0 +1,136 @@
+[
+  {
+    "id": "hist-1795232094757",
+    "invoiceNumber": "20261121-001",
+    "orderCode": "T1B-51",
+    "tableCode": "T1B",
+    "roomName": "AC Room",
+    "grandTotalPaise": 30000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-21T03:34:54.757Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1795231926800-0",
+        "itemId": "m-1794930797982-655",
+        "itemName": "Masala dosa",
+        "itemMalayalamName": "",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795231926800-1",
+        "itemId": "m-1794636706100-431",
+        "itemName": "Chicken 65",
+        "itemMalayalamName": "ചിക്കൻ 65",
+        "quantity": 1,
+        "pricePaise": 20000,
+        "lineTotalPaise": 20000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795231926800-2",
+        "itemId": "m-1795005565057-315",
+        "itemName": "Water",
+        "itemMalayalamName": "",
+        "quantity": 1,
+        "pricePaise": 2000,
+        "lineTotalPaise": 2000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1, Chicken 65 X 1, Water X 1"
+  },
+  {
+    "id": "hist-1795233843663",
+    "invoiceNumber": "20261121-002",
+    "orderCode": "T2A-47",
+    "tableCode": "T2A",
+    "roomName": "Garden",
+    "grandTotalPaise": 24000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-21T04:04:03.663Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1795233669100-0",
+        "itemId": "m-1794636754551-541",
+        "itemName": "Dosa",
+        "itemMalayalamName": "ദോശ",
+        "quantity": 1,
+        "pricePaise": 1500,
+        "lineTotalPaise": 1500,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795233669100-1",
+        "itemId": "m-1794636706100-431",
+        "itemName": "Chicken 65",
+        "itemMalayalamName": "ചിക്കൻ 65",
+        "quantity": 1,
+        "pricePaise": 20000,
+        "lineTotalPaise": 20000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795233669100-2",
+        "itemId": "m-1794636649642-335",
+        "itemName": "Idli",
+        "itemMalayalamName": "ഇഡ്ഡലി",
+        "quantity": 1,
+        "pricePaise": 2500,
+        "lineTotalPaise": 2500,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Dosa X 1, Chicken 65 X 1, Idli X 1"
+  },
+  {
+    "id": "hist-quick-1795237260963",
+    "invoiceNumber": "20261121-003",
+    "orderCode": "DIR-20261121-003",
+    "tableCode": "T1A",
+    "roomName": "Dining Area",
+    "grandTotalPaise": 2500,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-21T05:01:00.963Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "itemName": "Idli",
+        "quantity": 1,
+        "pricePaise": 2500,
+        "lineTotalPaise": 2500
+      }
+    ],
+    "itemsSummary": "Idli X 1"
+  },
+  {
+    "id": "hist-quick-1795238256807",
+    "invoiceNumber": "20261121-004",
+    "orderCode": "DIR-20261121-004",
+    "tableCode": "TAKEAWAY",
+    "roomName": "Takeaway Desk",
+    "grandTotalPaise": 20000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-21T05:17:36.806Z",
+    "cashier": "Rahul Nair",
+    "items": [
+      {
+        "itemName": "Chicken 65",
+        "quantity": 1,
+        "pricePaise": 20000,
+        "lineTotalPaise": 20000
+      }
+    ],
+    "itemsSummary": "Chicken 65 X 1"
+  }
+]

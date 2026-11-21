@@ -1,0 +1,28 @@
+=========================================================================
+          ITHI POORAM (???????????) - MOBILE PHONE ACCESS LINKS
+=========================================================================
+
+? OPTION A: BEST FOR CASHIER & KITCHEN (CONNECT PHONES TO 'IthiPooram-POS' HOTSPOT):
+   Permanent Fixed IP - 100% Offline Proof - Zero Lag - Never Resets
+   1. Cashier Billing Phone:      http://192.168.137.1:3000/billing
+   2. Kitchen Display (KDS):      http://192.168.137.1:3000/kitchen
+   3. Manager Dashboard:          http://192.168.137.1:3000/
+
+? OPTION B: SHOP WI-FI FALLBACK:
+   1. Cashier Billing:            http://192.168.137.1:3000/billing
+   2. Kitchen Display (KDS):      http://192.168.137.1:3000/kitchen
+
+?? FOR CUSTOMERS SCANNING TABLE QR CODES (MOBILE DATA 4G/5G):
+   Live QR Menu & Order Link:     https://ithipooram-order.ithipooram-pos.workers.dev
+
+=========================================================================
+HOW TO INSTALL AS REAL APP ON PHONES:
+On Cashier/Kitchen phone: Open the link in Chrome -> Tap 3 dots -> 'Add to Home screen'.
+It will install as a full-screen app with an icon on your phone!
+=========================================================================
+NOTE: Keep the laptop plugged into its charger.
+You can close the laptop screen/lid; it will stay running in the background.
+=========================================================================
+
+
+

@@ -1,12 +1,13 @@
 // ============================================================================
 // ITHI POORAM (ഇത്തിപ്പൂരം) — GOOGLE WORKSPACE LIVE DATABASE ENGINE
-// Admin: adithiyanpv6@gmail.com
+// Admin: ithipoorampos@gmail.com
+// Linked Sheet: https://docs.google.com/spreadsheets/d/1sk_qbGAP74h26oYiDkMin815GbKikMJf6cqdK4thT4Y/edit
 // Continuously synchronizes Staff, Sessions, and Table Orders directly into
 // Google Sheets / Google Workspace without creating multiple files.
 // ============================================================================
 
 import { db, refreshTableSummaries } from './serverDb';
-import { GOOGLE_WORKSPACE_CONFIG } from '@/config/googleWorkspace';
+import { getGoogleWorkspaceConfig } from '@/config/googleWorkspace';
 
 function escapeCsvCell(val: any): string {
   if (val === undefined || val === null) return '""';
@@ -161,10 +162,11 @@ export function getOrdersCsv(): string {
  */
 export function getFullGoogleWorkspacePayload() {
   refreshTableSummaries();
+  const config = getGoogleWorkspaceConfig();
   return {
-    adminEmail: GOOGLE_WORKSPACE_CONFIG.adminEmail,
-    restaurant: GOOGLE_WORKSPACE_CONFIG.restaurantName,
-    location: GOOGLE_WORKSPACE_CONFIG.restaurantLocation,
+    adminEmail: config.adminEmail,
+    restaurant: config.restaurantName,
+    location: config.restaurantLocation,
     updatedAt: new Date().toISOString(),
     staff: (db.staffUsers || []).map((s, idx) => ({
       index: idx + 1,
@@ -225,19 +227,149 @@ export function getFullGoogleWorkspacePayload() {
  */
 export async function pushLiveUpdateToGoogleWorkspace(): Promise<{ success: boolean; message: string }> {
   try {
-    const webhookUrl = GOOGLE_WORKSPACE_CONFIG.webhookUrl;
+    const config = getGoogleWorkspaceConfig();
+    const webhookUrl = config.webhookUrl;
     if (!webhookUrl) {
       return {
         success: true,
-        message: 'Google Workspace live feeds ready. Data is accessible live via CSV/API feeds.',
+        message: 'Google Sheets sync configured for ' + config.adminEmail + '. Add Web App webhook URL to stream directly.',
       };
     }
 
+    const todayIst = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const allTodaySales = (db.historicalSales || []).filter(
+      (s) => (s.settledAt ? new Date(s.settledAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }) : todayIst) === todayIst
+    );
+
+    // 1. Enrich menu categories with active sold counts and live revenue
+    const enrichedMenuCategories = (db.menuCategories || []).map((cat) => ({
+      ...cat,
+      items: (cat.items || []).map((it) => {
+        let sold = 0;
+        allTodaySales.forEach((s) => {
+          (s.items || []).forEach((si: any) => {
+            if ((si.itemId && si.itemId === it.id) || (si.itemName && si.itemName.trim().toLowerCase() === it.name.trim().toLowerCase())) {
+              sold += Number(si.quantity || si.qty || 1);
+            }
+          });
+        });
+        (db.orders || []).forEach((o) => {
+          (o.items || []).forEach((oi) => {
+            if ((oi.itemId && oi.itemId === it.id) || (oi.itemName && oi.itemName.trim().toLowerCase() === it.name.trim().toLowerCase())) {
+              sold += Number(oi.quantity || 1);
+            }
+          });
+        });
+        const unitPriceInr = (it.pricePaise || 0) / 100;
+        return {
+          ...it,
+          soldQuantity: sold,
+          price: unitPriceInr,
+          totalRevenueInr: sold * unitPriceInr,
+        };
+      }),
+    }));
+
+    // Preserve history: Include dishes that were sold today even if deleted from active menu!
+    const existingDishNames = new Set(
+      enrichedMenuCategories.flatMap((c) => (c.items || []).map((i) => i.name.trim().toLowerCase()))
+    );
+    const archivedItems: any[] = [];
+    allTodaySales.forEach((s) => {
+      (s.items || []).forEach((si: any) => {
+        const dName = (si.itemName || si.name || '').trim();
+        const lower = dName.toLowerCase();
+        if (dName && !existingDishNames.has(lower)) {
+          existingDishNames.add(lower);
+          const price = (si.pricePaise || 0) / 100;
+          const qty = Number(si.quantity || si.qty || 1);
+          archivedItems.push({
+            id: si.itemId || `archived-${archivedItems.length + 1}`,
+            name: dName,
+            malayalamName: si.itemMalayalamName || '',
+            price,
+            soldQuantity: qty,
+            totalRevenueInr: qty * price,
+            currentStock: 0,
+            isAvailable: false,
+          });
+        }
+      });
+    });
+    if (archivedItems.length > 0) {
+      enrichedMenuCategories.push({
+        id: 'cat-archived',
+        name: 'Daily Delicacies',
+        items: archivedItems,
+      } as any);
+    }
+
+    // 2. Enrich tables with both All-Time Sales Data and Today's Live Stats
+    const allHistorical = db.historicalSales || [];
+    const enrichedTables = (db.tables || []).map((t) => {
+      const tCode = (t.tableCode || '').trim().toUpperCase();
+      const tName = (t.displayName || '').trim().toUpperCase();
+
+      const tableAllSales = allHistorical.filter((s: any) => {
+        const sc = (s.tableCode || '').trim().toUpperCase();
+        const sn = (s.tableName || '').trim().toUpperCase();
+        return (sc && (sc === tCode || sc === tName)) || (sn && (sn === tCode || sn === tName));
+      });
+
+      const tableTodaySales = allTodaySales.filter((s: any) => {
+        const sc = (s.tableCode || '').trim().toUpperCase();
+        const sn = (s.tableName || '').trim().toUpperCase();
+        return (sc && (sc === tCode || sc === tName)) || (sn && (sn === tCode || sn === tName));
+      });
+
+      const tableActiveOrders = (db.orders || []).filter((o) => {
+        const oc = (o.tableCode || '').trim().toUpperCase();
+        const on = (o.tableName || '').trim().toUpperCase();
+        return ((oc && (oc === tCode || oc === tName)) || (on && (on === tCode || on === tName))) && o.paymentStatus === 'UNPAID';
+      });
+
+      const allTimeCount = tableAllSales.length;
+      const allTimePaise = tableAllSales.reduce((sum, s) => sum + (s.grandTotalPaise || 0), 0);
+      const allTimeInr = allTimePaise / 100;
+
+      const totalOrdersToday = tableTodaySales.length + tableActiveOrders.length;
+      const settledPaise = tableTodaySales.reduce((sum, s) => sum + (s.grandTotalPaise || 0), 0);
+      const activePaise = tableActiveOrders.reduce((sum, o) => sum + (o.grandTotalPaise || 0), 0);
+      const totalAmountTodayInr = (settledPaise + activePaise) / 100;
+
+      const latestTime = tableActiveOrders[0]?.createdAt || tableTodaySales[0]?.settledAt || tableAllSales[0]?.settledAt || '';
+
+      return {
+        ...t,
+        roomName: t.roomName || 'Dining Area',
+        allTimeOrdersCount: allTimeCount,
+        allTimeRevenueInr: allTimeInr,
+        todayOrdersCount: totalOrdersToday,
+        totalAmountToday: totalAmountTodayInr,
+        currentStatus: tableActiveOrders.length > 0 
+          ? (tableActiveOrders.some(o => o.fulfillmentStatus === 'READY' || o.fulfillmentStatus === 'SERVED') ? 'BILL_PENDING' : 'OCCUPIED') 
+          : 'AVAILABLE',
+        lastOrderTime: latestTime ? new Date(latestTime).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : 'None',
+      };
+    });
+
     const payload = {
       action: 'FULL_SYNC',
-      tables: db.tables || [],
-      menuCategories: db.menuCategories || [],
+      tables: enrichedTables,
+      menuCategories: enrichedMenuCategories,
       staffUsers: db.staffUsers || [],
+      historicalSales: (db.historicalSales || []).slice(0, 150).map((s) => ({
+        id: s.id,
+        invoiceNumber: s.invoiceNumber,
+        orderCode: s.orderCode,
+        tableCode: s.tableCode,
+        roomName: s.roomName || 'Dining Area',
+        grandTotalPaise: s.grandTotalPaise,
+        paymentMode: s.paymentMode,
+        settledAt: s.settledAt,
+        cashier: s.cashier,
+        itemsSummary: s.itemsSummary || (s.items || []).map((i: any) => `${i.itemName || i.name} x ${i.quantity || i.qty || 1}`).join(', '),
+      })),
       orders: db.orders || [],
       updatedAt: new Date().toISOString(),
     };
@@ -246,10 +378,11 @@ export async function pushLiveUpdateToGoogleWorkspace(): Promise<{ success: bool
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15000),
     });
 
     if (res.ok) {
-      return { success: true, message: `Google Sheet under ${GOOGLE_WORKSPACE_CONFIG.adminEmail} updated in real-time!` };
+      return { success: true, message: `Google Sheet under ${config.adminEmail} updated in real-time!` };
     } else {
       return { success: false, message: `Webhook responded with status ${res.status}` };
     }
@@ -259,23 +392,26 @@ export async function pushLiveUpdateToGoogleWorkspace(): Promise<{ success: bool
 }
 
 /**
- * Pushes a new customer/waiter order to Google Sheet Live_Orders in real-time
+ * Pushes a new customer/waiter order to Google Sheet in real-time
  */
 export async function pushOrderToGoogleDrive(order: any) {
   try {
-    const webhookUrl = GOOGLE_WORKSPACE_CONFIG.webhookUrl;
+    const config = getGoogleWorkspaceConfig();
+    const webhookUrl = config.webhookUrl;
     if (!webhookUrl) return;
 
     const itemsSummary = (order.items || []).map((it: any) => `${it.quantity || it.qty || 1}x ${it.itemName || it.name}`).join('; ');
     await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(10000),
       body: JSON.stringify({
         action: 'NEW_ORDER',
         order: {
           customerCode: order.customerCode || order.id,
           tableCode: order.tableCode,
           tableName: order.tableName,
+          roomName: order.roomName || 'Dining Area',
           itemsSummary,
           grandTotalPaise: order.grandTotalPaise || order.subtotalPaise || 0,
           fulfillmentStatus: order.fulfillmentStatus || 'NEW',
@@ -289,25 +425,31 @@ export async function pushOrderToGoogleDrive(order: any) {
 }
 
 /**
- * Pushes settled POS bill to Google Sheet Sales_Ledger in real-time
+ * Pushes settled POS bill to Google Sheet Billing_Settlement and Sales_Ledger in real-time
  */
 export async function pushSettledBillToGoogleDrive(sale: any) {
   try {
-    const webhookUrl = GOOGLE_WORKSPACE_CONFIG.webhookUrl;
+    const config = getGoogleWorkspaceConfig();
+    const webhookUrl = config.webhookUrl;
     if (!webhookUrl) return;
 
     await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(10000),
       body: JSON.stringify({
         action: 'BILL_SETTLED',
         sale: {
           invoiceNumber: sale.invoiceNumber,
           orderCode: sale.orderCode,
           tableCode: sale.tableCode,
+          tableName: sale.tableName || sale.tableCode || 'Table',
+          roomName: sale.roomName || 'Dining Area',
           paymentMode: sale.paymentMode || 'UPI',
           grandTotalPaise: sale.grandTotalPaise,
           cashier: sale.cashier || 'Cashier',
+          itemsSummary: sale.itemsSummary || (sale.items || []).map((i: any) => `${i.itemName || i.name || 'Dish'} x ${i.quantity || i.qty || 1}`).join(', '),
+          timestamp: sale.timestamp || new Date().toISOString(),
         },
       }),
     });

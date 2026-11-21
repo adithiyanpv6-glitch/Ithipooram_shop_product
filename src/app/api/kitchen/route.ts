@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { db, refreshTableSummaries, persistDb } from '@/lib/serverDb';
+import { db, refreshTableSummaries, persistDb, getIstDateString } from '@/lib/serverDb';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, PATCH, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, PATCH, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
@@ -15,7 +15,19 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const station = searchParams.get('station');
 
-  let result = db.kitchenTickets;
+  // Filter KDS tickets to today's date in IST only - refreshes each day cleanly
+  const todayIst = getIstDateString();
+  let result = (db.kitchenTickets || []).filter((k) => {
+    const ticketDate = getIstDateString(new Date(k.createdAtMs || Date.now()));
+    return ticketDate === todayIst;
+  }).map((k) => {
+    if (!k.roomName) {
+      const table = (db.tables || []).find((t) => (t.tableCode || '').toUpperCase() === (k.tableCode || '').toUpperCase());
+      k.roomName = table?.roomName || 'Dining Area';
+    }
+    return k;
+  });
+
   if (station && station !== 'ALL') {
     result = result.filter((k) => k.station === station);
   }
@@ -74,6 +86,25 @@ export async function PATCH(request: Request) {
     });
 
     return NextResponse.json({ success: true, ticket }, { headers: corsHeaders });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500, headers: corsHeaders });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const action = searchParams.get('action') || 'CLEAR_SERVED';
+
+    if (action === 'CLEAR_ALL') {
+      db.kitchenTickets = [];
+    } else {
+      // CLEAR_SERVED: Remove all served tickets
+      db.kitchenTickets = (db.kitchenTickets || []).filter((k) => k.status !== 'SERVED');
+    }
+
+    persistDb();
+    return NextResponse.json({ success: true, tickets: db.kitchenTickets }, { headers: corsHeaders });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500, headers: corsHeaders });
   }

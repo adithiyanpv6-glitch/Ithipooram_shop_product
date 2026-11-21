@@ -19,9 +19,24 @@ import {
   Sparkles, 
   ChevronDown,
   Receipt,
-  ChefHat
+  ChefHat,
+  Trash2
 } from 'lucide-react';
 import { apiRequest, getCurrentUser } from '../../lib/api';
+
+function cleanImageUrl(rawUrl: string): string {
+  if (!rawUrl) return '';
+  const trimmed = rawUrl.trim();
+  // If user pasted a Google Images search result link, extract direct image URL
+  if (trimmed.includes('google.') && trimmed.includes('imgurl=')) {
+    try {
+      const parsed = new URL(trimmed);
+      const direct = parsed.searchParams.get('imgurl');
+      if (direct) return decodeURIComponent(direct);
+    } catch (e) {}
+  }
+  return trimmed;
+}
 
 export default function MenuItemsPage() {
   const router = useRouter();
@@ -54,35 +69,12 @@ export default function MenuItemsPage() {
       if (res.ok) {
         const cats = await res.json();
         if (Array.isArray(cats)) {
-          if (cats.length > 0) {
-            setCategories(cats);
-            if (typeof window !== 'undefined') {
-              localStorage.setItem('ithipooram_menu_categories', JSON.stringify(cats));
-              const flat: any[] = [];
-              cats.forEach(c => (c.items || []).forEach((it: any) => flat.push({ ...it, category: c.name })));
-              localStorage.setItem('ithipooram_custom_menu_dishes', JSON.stringify(flat));
-            }
-          } else {
-            // Server has 0 items. Check if local client has cached items to recover
-            if (typeof window !== 'undefined') {
-              const cached = localStorage.getItem('ithipooram_menu_categories');
-              if (cached) {
-                try {
-                  const parsed = JSON.parse(cached);
-                  if (Array.isArray(parsed) && parsed.length > 0) {
-                    setCategories(parsed);
-                    // Re-sync with server so server doesn't remain empty
-                    await fetch('/api/menu', {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ categories: parsed }),
-                    });
-                    return;
-                  }
-                } catch (err) {}
-              }
-            }
-            setCategories([]);
+          setCategories(cats);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('ithipooram_menu_categories', JSON.stringify(cats));
+            const flat: any[] = [];
+            cats.forEach(c => (c.items || []).forEach((it: any) => flat.push({ ...it, category: c.name })));
+            localStorage.setItem('ithipooram_custom_menu_dishes', JSON.stringify(flat));
           }
         }
       }
@@ -109,17 +101,12 @@ export default function MenuItemsPage() {
       router.replace('/login');
       return;
     }
-    // Instant preload from local storage cache to eliminate lag or blank state
+    // Clear any legacy cached test menu so fresh app starts clean
     if (typeof window !== 'undefined') {
       const cached = localStorage.getItem('ithipooram_menu_categories');
-      if (cached) {
-        try {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setCategories(parsed);
-            setLoading(false);
-          }
-        } catch (e) {}
+      if (cached && (cached.includes('Chicken 65') || cached.includes('Kerala Specials') || cached.includes('Idli'))) {
+        localStorage.removeItem('ithipooram_menu_categories');
+        localStorage.removeItem('ithipooram_custom_menu_dishes');
       }
     }
     loadMenu();
@@ -226,6 +213,45 @@ export default function MenuItemsPage() {
       }
     } catch (e) {
       alert('Error saving item');
+    }
+  };
+
+  const handleRemoveCategory = async (catId: string, catName: string) => {
+    if (!confirm(`Are you sure you want to delete category "${catName}" and all its dishes?`)) return;
+    try {
+      const res = await apiRequest(`/menu?categoryId=${encodeURIComponent(catId || catName)}`, {
+        method: 'DELETE',
+      });
+      if (res && res.categories) {
+        setCategories(res.categories);
+      } else {
+        setCategories((prev) => prev.filter((c) => c.id !== catId && c.name.toLowerCase() !== catName.toLowerCase()));
+      }
+      if (selectedCategory.toLowerCase() === catName.toLowerCase()) {
+        setSelectedCategory('All');
+      }
+      fetch('/api/google-workspace/sync', { method: 'POST' }).catch(() => {});
+    } catch (err: any) {
+      alert(err.message || 'Failed to remove category');
+    }
+  };
+
+  const handleAddCategory = async () => {
+    const cat = prompt('Enter new category name:');
+    if (cat && cat.trim()) {
+      const trimmed = cat.trim();
+      const newCat = { id: `cat-${Date.now()}`, name: trimmed, items: [] };
+      const updatedCats = [...categories, newCat];
+      setCategories(updatedCats);
+      try {
+        await apiRequest('/menu', {
+          method: 'PUT',
+          body: JSON.stringify({ categories: updatedCats }),
+        });
+        fetch('/api/google-workspace/sync', { method: 'POST' }).catch(() => {});
+      } catch (err) {
+        console.warn('Category persist error:', err);
+      }
     }
   };
 
@@ -344,18 +370,6 @@ export default function MenuItemsPage() {
             <span>Items</span>
           </Link>
 
-          {/* Kitchen Display (KDS) */}
-          <Link
-            href="/kitchen"
-            className="flex items-center justify-between px-3.5 py-3 rounded-2xl text-zinc-400 hover:bg-zinc-900 hover:text-white font-bold text-sm transition"
-          >
-            <div className="flex items-center space-x-3">
-              <ChefHat className="w-4 h-4 text-orange-400" />
-              <span>Kitchen (KDS)</span>
-            </div>
-            <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />
-          </Link>
-
           <Link
             href="/users"
             className="flex items-center justify-between px-3.5 py-3 rounded-2xl text-zinc-400 hover:bg-zinc-900 hover:text-white font-bold text-sm transition"
@@ -432,10 +446,6 @@ export default function MenuItemsPage() {
             <UtensilsCrossed className="w-4 h-4" />
             <span>Items</span>
           </Link>
-          <Link href="/kitchen" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-zinc-300 font-bold text-sm">
-            <ChefHat className="w-4 h-4 text-orange-400" />
-            <span>Kitchen (KDS)</span>
-          </Link>
           <Link href="/users" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-zinc-300 font-bold text-sm">
             <MoreHorizontal className="w-4 h-4" />
             <span>More</span>
@@ -492,13 +502,9 @@ export default function MenuItemsPage() {
                 CATEGORY
               </span>
               <button 
-                onClick={() => {
-                  const cat = prompt('Enter new category name:');
-                  if (cat && cat.trim()) {
-                    setCategories((prev) => [...prev, { id: `cat-${Date.now()}`, name: cat.trim(), items: [] }]);
-                  }
-                }}
-                className="text-[11px] font-extrabold text-zinc-700 hover:text-black flex items-center space-x-0.5"
+                type="button"
+                onClick={handleAddCategory}
+                className="text-[11px] font-extrabold text-zinc-700 hover:text-black flex items-center space-x-0.5 cursor-pointer px-2 py-1 rounded-lg hover:bg-zinc-100 transition"
               >
                 <span>+ Add</span>
               </button>
@@ -507,6 +513,7 @@ export default function MenuItemsPage() {
             <div className="space-y-1">
               {/* "All" Category Pill */}
               <button
+                type="button"
                 onClick={() => setSelectedCategory('All')}
                 className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-extrabold transition cursor-pointer ${
                   selectedCategory === 'All'
@@ -519,20 +526,50 @@ export default function MenuItemsPage() {
               </button>
 
               {/* Dynamic Categories */}
-              {Object.entries(categoryCounts).map(([catName, count]) => (
-                <button
-                  key={catName}
-                  onClick={() => setSelectedCategory(catName)}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition cursor-pointer ${
-                    selectedCategory === catName
-                      ? 'bg-zinc-100 text-black font-extrabold shadow-xs'
-                      : 'text-zinc-600 hover:bg-zinc-50'
-                  }`}
-                >
-                  <span className="truncate pr-2">{catName}</span>
-                  <span className="font-mono text-zinc-400 text-[11px]">{count}</span>
-                </button>
-              ))}
+              {categories.length === 0 ? (
+                <div className="p-3 text-center text-[11px] text-zinc-400 font-semibold border-2 border-dashed border-zinc-200 rounded-xl">
+                  No categories yet. Click &ldquo;+ Add&rdquo; above.
+                </div>
+              ) : (
+                categories.map((cat) => {
+                  const count = allDishes.filter(
+                    (d) => (d.categoryName || '').toLowerCase() === cat.name.toLowerCase()
+                  ).length;
+                  const isSelected = selectedCategory.toLowerCase() === cat.name.toLowerCase();
+                  return (
+                    <div
+                      key={cat.id || cat.name}
+                      className={`group flex items-center justify-between px-3.5 py-2 rounded-2xl text-xs font-bold transition cursor-pointer ${
+                        isSelected
+                          ? 'bg-zinc-100 text-black font-extrabold shadow-xs'
+                          : 'text-zinc-600 hover:bg-zinc-50'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCategory(cat.name)}
+                        className="flex-1 text-left truncate pr-2 cursor-pointer"
+                      >
+                        {cat.name}
+                      </button>
+                      <div className="flex items-center space-x-1.5 shrink-0">
+                        <span className="font-mono text-zinc-400 text-[11px]">{count}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveCategory(cat.id, cat.name);
+                          }}
+                          className="opacity-60 group-hover:opacity-100 p-1 hover:text-red-600 rounded-lg hover:bg-red-50 transition cursor-pointer"
+                          title={`Delete category ${cat.name}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
 
@@ -567,12 +604,8 @@ export default function MenuItemsPage() {
                           </td>
                           <td className="py-3.5 px-4">
                             <div className="flex items-center space-x-3">
-                              <div className="w-10 h-10 rounded-xl bg-zinc-100 border border-zinc-200 flex items-center justify-center font-bold text-xs text-zinc-600 shrink-0 overflow-hidden">
-                                {dish.image ? (
-                                  <img src={dish.image} alt={dish.name} className="w-full h-full object-cover" />
-                                ) : (
-                                  dish.name.slice(0, 2).toUpperCase()
-                                )}
+                              <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center font-black text-xs text-blue-700 shrink-0">
+                                {dish.name.slice(0, 2).toUpperCase()}
                               </div>
                               <div>
                                 <div className="font-extrabold text-black text-sm">{dish.name}</div>
@@ -695,10 +728,11 @@ export default function MenuItemsPage() {
                       className="appearance-none w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 text-xs font-bold text-zinc-700 outline-none bg-white cursor-pointer pr-8"
                     >
                       <option value="">Select Category</option>
-                      <option value="Seafood Specials">Seafood Specials</option>
-                      <option value="Traditional Meals">Traditional Meals</option>
-                      <option value="Snacks &amp; Tiffin">Snacks &amp; Tiffin</option>
-                      <option value="Beverages">Beverages</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id || cat.name} value={cat.name}>
+                          {cat.name}
+                        </option>
+                      ))}
                     </select>
                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-blue-500">
                       <ChevronDown className="w-4 h-4" />
@@ -752,85 +786,6 @@ export default function MenuItemsPage() {
                     placeholder="e.g. 30"
                     className="w-full px-3 py-2.5 rounded-xl border border-zinc-300 text-xs font-bold text-black outline-none focus:border-black font-mono"
                   />
-                </div>
-              </div>
-
-              {/* Dish Photo Search & Image Selector */}
-              <div>
-                <label className="block text-zinc-800 font-extrabold mb-1">
-                  Dish Photo / വിഭവത്തിന്റെ ചിത്രം
-                </label>
-                <div className="border border-zinc-200 rounded-2xl p-3.5 space-y-3 bg-zinc-50/70">
-                  
-                  {/* Google Image Search Button */}
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-3 bg-white rounded-xl border border-zinc-200">
-                    <div>
-                      <p className="text-xs font-bold text-black">Find photo for &quot;{itemName || 'your dish'}&quot;</p>
-                      <p className="text-[11px] text-zinc-500">Opens Google Images in a new tab. Copy any image address and paste below.</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const query = (itemName ? `${itemName} Kerala food restaurant` : 'Kerala traditional food').trim();
-                        window.open(`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}`, '_blank');
-                      }}
-                      className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center space-x-1.5 shadow-xs shrink-0 cursor-pointer active:scale-95"
-                    >
-                      <span>🔍 Search on Google</span>
-                    </button>
-                  </div>
-
-                  {/* Image URL input with Live Preview */}
-                  <div>
-                    <label className="block text-zinc-700 font-bold text-[11px] mb-1">
-                      Image URL (Paste link from Google or anywhere):
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="url"
-                        value={itemImageUrl}
-                        onChange={(e) => setItemImageUrl(e.target.value)}
-                        placeholder="https://... (or choose a preset below)"
-                        className="flex-1 px-3 py-2 rounded-xl border border-zinc-300 text-xs font-medium text-black outline-none focus:border-black"
-                      />
-                      {itemImageUrl && (
-                        <div className="w-10 h-10 rounded-xl overflow-hidden border border-zinc-300 shrink-0 bg-white">
-                          <img src={itemImageUrl} alt="Preview" className="w-full h-full object-cover" />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* 1-Tap Kerala Photo Presets */}
-                  <div>
-                    <p className="text-zinc-600 text-[11px] font-bold mb-1.5">Or 1-Tap Kerala Photo Presets:</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {[
-                        { name: 'Porotta', img: '/sections/billing-pos.jpg' },
-                        { name: 'Fish Fry', img: '/sadhya-bg.jpg' },
-                        { name: 'Sadhya Meals', img: '/sadhya-dark-bg.jpg' },
-                        { name: 'Chicken / Beef', img: '/sections/menu-stock.jpg' },
-                        { name: 'Chai / Coffee', img: '/sections/admin-analytics.jpg' },
-                      ].map((preset) => (
-                        <button
-                          key={preset.name}
-                          type="button"
-                          onClick={() => {
-                            setItemImageUrl(preset.img);
-                            if (!itemName) setItemName(preset.name);
-                          }}
-                          className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold transition cursor-pointer ${
-                            itemImageUrl === preset.img
-                              ? 'bg-black text-white border-black'
-                              : 'bg-white border-zinc-200 hover:border-black text-zinc-800'
-                          }`}
-                        >
-                          {preset.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
                 </div>
               </div>
 

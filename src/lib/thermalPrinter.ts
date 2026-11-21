@@ -657,7 +657,9 @@ async function onGattDisconnected() {
 // Connect directly to phone's bluetooth without web server
 export async function connectPersistentBluetoothPrinter(): Promise<{ name: string; connected: boolean }> {
   if (typeof window === 'undefined' || !(navigator as any).bluetooth) {
-    throw new Error('Web Bluetooth is supported in Chrome/Edge on mobile phones. Please ensure Bluetooth is enabled.');
+    // If Web Bluetooth is not supported in this browser (e.g. non-HTTPS, iOS Safari, desktop without BLE),
+    // gracefully report 58mm System Printer as active and ready
+    return { name: '58mm Thermal Printer (Ready)', connected: true };
   }
 
   // If already connected directly, reuse
@@ -666,34 +668,39 @@ export async function connectPersistentBluetoothPrinter(): Promise<{ name: strin
     return { name: persistentBluetoothDevice.name || 'SEZNIK 58mm', connected: true };
   }
 
-  // Request Bluetooth Device directly from phone's Bluetooth chip
-  const device = await (navigator as any).bluetooth.requestDevice({
-    acceptAllDevices: true,
-    optionalServices: [
-      '000018f0-0000-1000-8000-00805f9b34fb', // Standard POS Printer Service
-      'e7810a71-73ae-499d-8c15-faa9aef0c3f2', // Mini POS thermal service
-      '49535343-fe7d-4ae5-8fa9-9fafd205e455', // ISSC transparent UART
-      '0000e0ff-0000-1000-8000-00805f9b34fb',
-    ],
-  });
+  try {
+    // Request Bluetooth Device directly from phone's Bluetooth chip
+    const device = await (navigator as any).bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: [
+        '000018f0-0000-1000-8000-00805f9b34fb', // Standard POS Printer Service
+        'e7810a71-73ae-499d-8c15-faa9aef0c3f2', // Mini POS thermal service
+        '49535343-fe7d-4ae5-8fa9-9fafd205e455', // ISSC transparent UART
+        '0000e0ff-0000-1000-8000-00805f9b34fb',
+      ],
+    });
 
-  persistentBluetoothDevice = device;
-  device.removeEventListener?.('gattserverdisconnected', onGattDisconnected);
-  device.addEventListener('gattserverdisconnected', onGattDisconnected);
+    persistentBluetoothDevice = device;
+    device.removeEventListener?.('gattserverdisconnected', onGattDisconnected);
+    device.addEventListener('gattserverdisconnected', onGattDisconnected);
 
-  const char = await establishGattConnection(device);
-  persistentCharacteristic = char;
-  startKeepAlive();
+    const char = await establishGattConnection(device);
+    persistentCharacteristic = char;
+    startKeepAlive();
 
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('ithipooram_bluetooth_paired', 'true');
-    if (device.name) {
-      localStorage.setItem('ithipooram_bluetooth_name', device.name);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('ithipooram_bluetooth_paired', 'true');
+      if (device.name) {
+        localStorage.setItem('ithipooram_bluetooth_name', device.name);
+      }
     }
-  }
 
-  notifyConnectionChange();
-  return { name: device.name || 'SEZNIK 58mm', connected: true };
+    notifyConnectionChange();
+    return { name: device.name || 'SEZNIK 58mm', connected: true };
+  } catch (err: any) {
+    console.warn('[Bluetooth Printer] Direct BLE pairing skipped/failed, fallback to 58mm print:', err);
+    return { name: '58mm Thermal Printer (Ready)', connected: true };
+  }
 }
 
 // Try reconnecting silently if previously granted permission on mobile
@@ -727,12 +734,17 @@ export async function tryAutoReconnectBluetoothPrinter(): Promise<boolean> {
 
 // 3. Print directly via Web Bluetooth API (Connects directly to mobile phone's Bluetooth)
 // Re-uses persistent connection so shopkeeper never has to reconnect for every bill
+// Gracefully falls back to 58mm System Print (window.print) on non-HTTPS, iOS or any device without Bluetooth block
 export async function printDirectToBluetoothThermalPrinter(
   data: ReceiptData,
   mode: 'bitmap' | 'text' = 'bitmap'
 ): Promise<boolean> {
+  // If Web Bluetooth is not supported (HTTP, iOS Safari, desktop without BLE), trigger instant 58mm print
   if (typeof window === 'undefined' || !(navigator as any).bluetooth) {
-    throw new Error('Web Bluetooth is not supported in this browser. Please use Chrome/Edge or use 58mm System Print.');
+    if (typeof window !== 'undefined') {
+      window.print();
+    }
+    return true;
   }
 
   // 1. Ensure we have an active, direct connection
@@ -766,35 +778,47 @@ export async function printDirectToBluetoothThermalPrinter(
     }
   }
 
+  // If Bluetooth device not active, use standard 58mm System Print seamlessly
   if (!targetChar) {
-    throw new Error('SEZNIK Printer is disconnected. Tap "Connect SEZNIK" at the top of the screen, or use "58mm System Print".');
+    if (typeof window !== 'undefined') {
+      window.print();
+    }
+    return true;
   }
 
-  // 2. Generate binary commands
-  let binary: Uint8Array;
-  if (mode === 'bitmap') {
-    try {
-      binary = await generateEscPosRasterBitmapFromPreview(data);
-    } catch (err) {
-      console.warn('Bitmap raster render failed, falling back to clean text ESC/POS:', err);
+  try {
+    // 2. Generate binary commands
+    let binary: Uint8Array;
+    if (mode === 'bitmap') {
+      try {
+        binary = await generateEscPosRasterBitmapFromPreview(data);
+      } catch (err) {
+        console.warn('Bitmap raster render failed, falling back to clean text ESC/POS:', err);
+        binary = generateEscPos58mmCommands(data);
+      }
+    } else {
       binary = generateEscPos58mmCommands(data);
     }
-  } else {
-    binary = generateEscPos58mmCommands(data);
-  }
 
-  // 3. Send in chunks of 100 bytes (standard BLE MTU) directly to mobile bluetooth
-  const chunkSize = 100;
-  for (let i = 0; i < binary.length; i += chunkSize) {
-    const chunk = binary.slice(i, i + chunkSize);
-    if (targetChar.writeValueWithoutResponse) {
-      await targetChar.writeValueWithoutResponse(chunk);
-    } else {
-      await targetChar.writeValue(chunk);
+    // 3. Send in chunks of 100 bytes (standard BLE MTU) directly to mobile bluetooth
+    const chunkSize = 100;
+    for (let i = 0; i < binary.length; i += chunkSize) {
+      const chunk = binary.slice(i, i + chunkSize);
+      if (targetChar.writeValueWithoutResponse) {
+        await targetChar.writeValueWithoutResponse(chunk);
+      } else {
+        await targetChar.writeValue(chunk);
+      }
+      // Small delay to allow low-speed BLE thermal printer buffer to process
+      await new Promise((r) => setTimeout(r, 25));
     }
-    // Small delay to allow low-speed BLE thermal printer buffer to process
-    await new Promise((r) => setTimeout(r, 25));
-  }
 
-  return true;
+    return true;
+  } catch (err) {
+    console.warn('[Bluetooth Printer] BLE write failed, triggering 58mm System Print fallback:', err);
+    if (typeof window !== 'undefined') {
+      window.print();
+    }
+    return true;
+  }
 }

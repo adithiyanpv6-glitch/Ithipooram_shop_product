@@ -47,20 +47,19 @@ export default function MobileBottomNav() {
     setDeferredPrompt(null);
   };
 
-  // Do not render bottom nav on kitchen KDS, customer ordering, or login pages
-  // Keeps the Kitchen display 100% locked down and secure with no access to billing/admin
-  if (pathname === '/login' || pathname.startsWith('/kitchen') || pathname.startsWith('/order') || pathname.startsWith('/t/')) {
+  // Do not render bottom nav on customer ordering or login pages
+  if (pathname === '/login' || pathname.startsWith('/order') || pathname.startsWith('/t/')) {
     return null;
   }
 
-  // Exact 6-item mobile bottom navigation bar requested:
-  // Home, Tables, Billing, Items, Kitchen (KDS), More
+  // 6-item mobile bottom navigation bar:
+  // Home, Tables, Billing, Items, KDS, More
   const navItems = [
     { label: 'Home', href: '/', icon: Home, match: pathname === '/' },
     { label: 'Tables', href: '/qr', icon: Grid3X3, match: pathname.startsWith('/qr') },
     { label: 'Billing', href: '/billing', icon: Receipt, match: pathname.startsWith('/billing') },
     { label: 'Items', href: '/menu', icon: UtensilsCrossed, match: pathname.startsWith('/menu') },
-    { label: 'Kitchen', href: '/kitchen', icon: ChefHat, match: pathname.startsWith('/kitchen'), badge: true },
+    { label: 'KDS', href: '/kitchen', icon: ChefHat, match: pathname.startsWith('/kitchen') },
     { label: 'More', href: '/users', icon: MoreHorizontal, match: pathname.startsWith('/users') || pathname.startsWith('/reports') },
   ];
 
@@ -119,7 +118,7 @@ export default function MobileBottomNav() {
             >
               <div className={`p-1 rounded-xl transition relative ${active ? 'bg-white text-black shadow-md' : 'bg-transparent'}`}>
                 <Icon className="w-4 h-4 shrink-0" />
-                {item.badge && (
+                {(item as any).badge && (
                   <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-orange-500 animate-ping" />
                 )}
               </div>

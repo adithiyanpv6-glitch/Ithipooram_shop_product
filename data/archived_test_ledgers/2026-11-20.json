@@ -1,0 +1,170 @@
+[
+  {
+    "id": "hist-1795181203349",
+    "invoiceNumber": "20261120-001",
+    "orderCode": "T2B-34",
+    "tableCode": "T2B",
+    "roomName": "Garden",
+    "grandTotalPaise": 100000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-20T13:26:43.349Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1795180923309-0",
+        "itemId": "m-1794636649642-335",
+        "itemName": "Idli",
+        "itemMalayalamName": "ഇഡ്ഡലി",
+        "quantity": 1,
+        "pricePaise": 2500,
+        "lineTotalPaise": 2500,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795180923309-1",
+        "itemId": "m-1794636706100-431",
+        "itemName": "Chicken 65",
+        "itemMalayalamName": "ചിക്കൻ 65",
+        "quantity": 1,
+        "pricePaise": 20000,
+        "lineTotalPaise": 20000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795180923309-2",
+        "itemId": "m-1794636754551-541",
+        "itemName": "Dosa",
+        "itemMalayalamName": "ദോശ",
+        "quantity": 1,
+        "pricePaise": 1500,
+        "lineTotalPaise": 1500,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795180923309-3",
+        "itemId": "m-1794930797982-655",
+        "itemName": "Masala dosa",
+        "itemMalayalamName": "",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795180923309-4",
+        "itemId": "m-1795005565057-315",
+        "itemName": "Water",
+        "itemMalayalamName": "",
+        "quantity": 1,
+        "pricePaise": 2000,
+        "lineTotalPaise": 2000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795180923309-5",
+        "itemId": "m-1795005580491-541",
+        "itemName": "Choora fry",
+        "itemMalayalamName": "",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "SEAFOOD_FRY",
+        "notes": ""
+      },
+      {
+        "id": "it-1795180923309-6",
+        "itemId": "m-1795005599206-826",
+        "itemName": "Meals",
+        "itemMalayalamName": "",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795181038761-0",
+        "itemId": "m-1794636649642-335",
+        "itemName": "Idli",
+        "itemMalayalamName": "ഇഡ്ഡലി",
+        "quantity": 1,
+        "pricePaise": 2500,
+        "lineTotalPaise": 2500,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795181038761-1",
+        "itemId": "m-1794636706100-431",
+        "itemName": "Chicken 65",
+        "itemMalayalamName": "ചിക്കൻ 65",
+        "quantity": 1,
+        "pricePaise": 20000,
+        "lineTotalPaise": 20000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795181038762-2",
+        "itemId": "m-1794636754551-541",
+        "itemName": "Dosa",
+        "itemMalayalamName": "ദോശ",
+        "quantity": 1,
+        "pricePaise": 1500,
+        "lineTotalPaise": 1500,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795181038762-3",
+        "itemId": "m-1794930797982-655",
+        "itemName": "Masala dosa",
+        "itemMalayalamName": "",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795181038762-4",
+        "itemId": "m-1795005565057-315",
+        "itemName": "Water",
+        "itemMalayalamName": "",
+        "quantity": 1,
+        "pricePaise": 2000,
+        "lineTotalPaise": 2000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795181038762-5",
+        "itemId": "m-1795005580491-541",
+        "itemName": "Choora fry",
+        "itemMalayalamName": "",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "SEAFOOD_FRY",
+        "notes": ""
+      },
+      {
+        "id": "it-1795181038762-6",
+        "itemId": "m-1795005599206-826",
+        "itemName": "Meals",
+        "itemMalayalamName": "",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Idli X 1, Chicken 65 X 1, Dosa X 1, Masala dosa X 1, Water X 1, Choora fry X 1, Meals X 1, Idli X 1, Chicken 65 X 1, Dosa X 1, Masala dosa X 1, Water X 1, Choora fry X 1, Meals X 1"
+  }
+]

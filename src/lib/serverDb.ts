@@ -10,6 +10,7 @@ export interface RestaurantTable {
   tableCode: string;
   displayName: string;
   capacity: number;
+  roomName?: string; // e.g. 'Living Room', 'AC Room', 'Dining Area', 'Family Hall', 'Garden'
   status: 'AVAILABLE' | 'ACTIVE_ORDER' | 'BILL_PENDING' | 'CLOSED';
   unpaidCount: number;
   unpaidTotalPaise: number;
@@ -55,6 +56,7 @@ export interface KitchenTicket {
   customerCode: string;
   tableCode: string;
   tableName: string;
+  roomName?: string; // e.g. 'Living Room', 'AC Room', 'Dining Area', 'Garden', 'Family Hall'
   station: 'MAIN_KITCHEN' | 'SEAFOOD_FRY' | 'BEVERAGE_COUNTER';
   stationLabel: string;
   status: 'NEW' | 'ACCEPTED' | 'PREPARING' | 'READY' | 'SERVED';
@@ -62,7 +64,7 @@ export interface KitchenTicket {
   acceptedAtMs?: number;
   deliveredAtMs?: number;
   tableNotes?: string;
-  items: Array<{ id: string; name: string; qty: number; notes?: string }>;
+  items: Array<{ id: string; name: string; malayalamName?: string; qty: number; notes?: string }>;
 }
 
 export interface AuditLogEntry {
@@ -144,6 +146,7 @@ declare global {
     kitchenTickets: KitchenTicket[];
     auditLogs: AuditLogEntry[];
     menuCategories: MenuCategoryDb[];
+    masterPin?: string;
     staffUsers: StaffUserRecord[];
     loginSessions: StaffLoginSession[];
     staffActivityLogs: StaffActivityLog[];
@@ -152,52 +155,22 @@ declare global {
     dailyOrderSequence?: number;
     dailyInvoiceSequence?: number;
     historicalSales: Array<{
+      id?: string;
       invoiceNumber: string;
       orderCode: string;
       tableCode: string;
+      roomName?: string;
       grandTotalPaise: number;
       paymentMode: string;
       settledAt: string;
       cashier: string;
+      items?: any[];
+      itemsSummary?: string;
     }>;
   } | undefined;
 }
 
 const DEFAULT_TABLES: RestaurantTable[] = [];
-
-// Seed sample historical sales for multi-day reporting
-function generateInitialHistoricalSales() {
-  const sales = [];
-  const now = new Date();
-  
-  // Past 30 days of data
-  for (let daysAgo = 30; daysAgo >= 0; daysAgo--) {
-    const dayDate = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
-    const dayOrdersCount = daysAgo === 0 ? 5 : Math.floor(Math.random() * 12 + 6);
-    
-    for (let i = 1; i <= dayOrdersCount; i++) {
-      const tNum = Math.floor(Math.random() * 10) + 1;
-      const tCode = `TQ${tNum}`;
-      const amountPaise = (Math.floor(Math.random() * 25 + 5) * 100) * 100;
-      const modes = ['UPI', 'CASH', 'CARD', 'SPLIT_PAYMENT'];
-      const mode = modes[Math.floor(Math.random() * modes.length)];
-      
-      const invoiceTime = new Date(dayDate);
-      invoiceTime.setHours(12 + (i % 8), Math.floor(Math.random() * 59));
-      
-      sales.push({
-        invoiceNumber: `INV-${dayDate.getFullYear()}${String(dayDate.getMonth() + 1).padStart(2, '0')}${String(dayDate.getDate()).padStart(2, '0')}-${String(i).padStart(3, '0')}`,
-        orderCode: `${tCode}-${String(i).padStart(2, '0')}`,
-        tableCode: tCode,
-        grandTotalPaise: amountPaise,
-        paymentMode: mode,
-        settledAt: invoiceTime.toISOString(),
-        cashier: i % 2 === 0 ? 'Gokul Krishnan' : 'Meera Rajesh',
-      });
-    }
-  }
-  return sales;
-}
 
 export function generateStaffId(name: string, orderNumber: number): string {
   const lettersOnly = (name || '').trim().replace(/[^a-zA-Z]/g, '').toLowerCase();
@@ -255,19 +228,221 @@ if (!global.__ITHIPOORAM_DB__) {
     global.__ITHIPOORAM_DB__.staffActivityLogs = [];
   }
 
-  // Clear any legacy mock tables so tables only appear when explicitly added by user
-  if (global.__ITHIPOORAM_DB__.tables?.some((t) => t.id === 't1' && t.displayName?.includes('Verandah'))) {
+  // Clear any legacy/test tables so tables only appear when explicitly added by shop owner
+  if (global.__ITHIPOORAM_DB__.tables?.some((t) => t.id === 't1' || t.tableCode === 'T1A' || t.tableCode === 'T2B' || t.id === 't-t1a-ac' || t.displayName?.includes('Verandah'))) {
     global.__ITHIPOORAM_DB__.tables = [];
   }
-  // Clear any legacy mock menu so dishes only appear when explicitly added by admin
-  if (global.__ITHIPOORAM_DB__.menuCategories?.some((c) => c.id === 'cat-1' || c.items?.some((it) => it.id === 'm1'))) {
+  // Clear any legacy/test menu so dishes only appear when explicitly added by admin
+  if (global.__ITHIPOORAM_DB__.menuCategories?.some((c) => c.id === 'cat-1' || c.name === 'Kerala Specials' || c.items?.some((it) => it.id === 'm1' || it.name === 'Idli' || it.name === 'Chicken 65'))) {
     global.__ITHIPOORAM_DB__.menuCategories = [];
   }
 }
 
 
-const isVercel = process.env.VERCEL === '1';
-const DB_FILE_PATH = isVercel ? path.join('/tmp', 'restaurant_store.json') : path.join(process.cwd(), 'data', 'restaurant_store.json');
+const DB_FILE_PATH = path.join(process.cwd(), 'data', 'restaurant_store.json');
+const BACKUP_FILE_PATH = path.join(process.cwd(), 'data', 'restaurant_store.bak');
+const LEDGER_DIR = path.join(process.cwd(), 'data', 'daily_ledgers');
+
+// Helper to get local date in Indian Standard Time (IST - Asia/Kolkata: YYYY-MM-DD)
+export function getIstDateString(d: Date | string = new Date()): string {
+  try {
+    const dateObj = typeof d === 'string' ? new Date(d) : d;
+    return dateObj.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+/**
+ * Returns formatted Day of Week and Date in Indian Standard Time (IST).
+ * E.g., dayName: "Friday", dateStr: "2026-11-20", formattedDate: "20 November 2026"
+ */
+export function getIstDayAndDateString(d: Date | string = new Date()): {
+  dayName: string;
+  dateStr: string;
+  formattedDate: string;
+  headerLabel: string;
+} {
+  try {
+    const dateObj = typeof d === 'string' ? new Date(d) : d;
+    const dayName = dateObj.toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata', weekday: 'long' });
+    const dateStr = dateObj.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    const formattedDate = dateObj.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'long', year: 'numeric' });
+    return {
+      dayName,
+      dateStr,
+      formattedDate,
+      headerLabel: `📅 ${dayName} — ${formattedDate} (${dateStr})`
+    };
+  } catch {
+    const dateStr = getIstDateString(d);
+    return {
+      dayName: 'Day',
+      dateStr,
+      formattedDate: dateStr,
+      headerLabel: `📅 ${dateStr}`
+    };
+  }
+}
+
+/**
+ * Robust universal date normalizer. Converts any input (today, yesterday, YYYY-MM-DD,
+ * DD/MM/YYYY, DD-MM-YYYY, DD-MMM-YYYY, ISO strings) to standard YYYY-MM-DD in IST.
+ */
+export function normalizeToIsoDate(input: string | Date | null | undefined): string {
+  if (!input) return getIstDateString();
+  if (input instanceof Date) return getIstDateString(input);
+  const s = String(input).trim();
+  if (!s || s.toLowerCase() === 'today') return getIstDateString();
+  if (s.toLowerCase() === 'yesterday') return getIstDateString(new Date(Date.now() - 24 * 60 * 60 * 1000));
+
+  // If already standard YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  // Handles DD/MM/YYYY, DD-MM-YYYY, YYYY/MM/DD, DD-MMM-YYYY
+  const parts = s.split(/[/.-]/);
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      // YYYY-MM-DD
+      const [y, m, d] = parts;
+      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+    if (parts[2].length === 4) {
+      // DD-MM-YYYY or DD-Mon-YYYY
+      const [d, mRaw, y] = parts;
+      const monthMap: Record<string, string> = {
+        jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+        jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12'
+      };
+      const mLower = mRaw.toLowerCase().slice(0, 3);
+      const m = monthMap[mLower] || mRaw.padStart(2, '0');
+      return `${y}-${m}-${d.padStart(2, '0')}`;
+    }
+  }
+
+  try {
+    const parsed = new Date(s);
+    if (!isNaN(parsed.getTime())) {
+      return getIstDateString(parsed);
+    }
+  } catch {}
+
+  return s;
+}
+
+// Append immutable settlement record to permanent date-partitioned disk ledger
+export function appendToDailyLedger(entry: {
+  id?: string;
+  invoiceNumber: string;
+  orderCode: string;
+  tableCode: string;
+  roomName?: string;
+  grandTotalPaise: number;
+  paymentMode: string;
+  settledAt: string;
+  cashier: string;
+  items?: any[];
+  itemsSummary?: string;
+}) {
+  try {
+    if (!fs.existsSync(LEDGER_DIR)) {
+      fs.mkdirSync(LEDGER_DIR, { recursive: true });
+    }
+    const targetDate = getIstDateString(entry.settledAt || new Date());
+    const ledgerFile = path.join(LEDGER_DIR, `${targetDate}.json`);
+    let list: any[] = [];
+    if (fs.existsSync(ledgerFile)) {
+      try {
+        const raw = fs.readFileSync(ledgerFile, 'utf8');
+        list = JSON.parse(raw);
+        if (!Array.isArray(list)) list = [];
+      } catch {}
+    }
+    const existingIdx = list.findIndex(
+      (item) => item.invoiceNumber === entry.invoiceNumber || (item.orderCode && item.orderCode === entry.orderCode)
+    );
+    if (existingIdx >= 0) {
+      list[existingIdx] = { ...list[existingIdx], ...entry };
+    } else {
+      list.push(entry);
+    }
+    const tmpLedger = `${ledgerFile}.${Date.now()}.${Math.random().toString(36).substring(2, 6)}.tmp`;
+    fs.writeFileSync(tmpLedger, JSON.stringify(list, null, 2), 'utf8');
+    try {
+      fs.renameSync(tmpLedger, ledgerFile);
+    } catch {
+      try { fs.writeFileSync(ledgerFile, JSON.stringify(list, null, 2), 'utf8'); } catch {}
+    }
+
+    // Keep memory historicalSales in perfect sync
+    if (!Array.isArray(db.historicalSales)) db.historicalSales = [];
+    const histIdx = db.historicalSales.findIndex(
+      (h) => h.invoiceNumber === entry.invoiceNumber || (h.orderCode && h.orderCode === entry.orderCode)
+    );
+    if (histIdx >= 0) {
+      db.historicalSales[histIdx] = { ...db.historicalSales[histIdx], ...entry };
+    } else {
+      db.historicalSales.unshift(entry);
+    }
+  } catch (err) {
+    console.error('[Daily Ledger] Failed to append entry:', err);
+  }
+}
+
+// Read all immutable settlements across all recorded history
+export function readAllDailyLedgers(): any[] {
+  try {
+    if (!fs.existsSync(LEDGER_DIR)) return [];
+    const files = fs.readdirSync(LEDGER_DIR).filter((f) => f.endsWith('.json')).sort().reverse();
+    const all: any[] = [];
+    const seen = new Set<string>();
+    for (const file of files) {
+      try {
+        let raw = fs.readFileSync(path.join(LEDGER_DIR, file), 'utf8');
+        if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1);
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          for (const item of list) {
+            const key = item.invoiceNumber || item.orderCode || item.id;
+            if (key && !seen.has(key)) {
+              seen.add(key);
+              all.push(item);
+            }
+          }
+        }
+      } catch {}
+    }
+    return all;
+  } catch (err) {
+    console.warn('[Daily Ledger] Error reading all ledgers:', err);
+    return [];
+  }
+}
+
+// Read all immutable settlements for any given IST date
+export function readDailyLedger(targetDate: string): any[] {
+  try {
+    const normDate = normalizeToIsoDate(targetDate);
+    const ledgerFile = path.join(LEDGER_DIR, `${normDate}.json`);
+    if (fs.existsSync(ledgerFile)) {
+      let raw = fs.readFileSync(ledgerFile, 'utf8');
+      if (raw.charCodeAt(0) === 0xFEFF) {
+        raw = raw.slice(1);
+      }
+      const list = JSON.parse(raw);
+      if (Array.isArray(list) && list.length > 0) return list;
+    }
+
+    // Fallback: search in-memory historicalSales for matching IST date
+    const matched = (db.historicalSales || []).filter((s) => {
+      return normalizeToIsoDate(s.settledAt) === normDate;
+    });
+    if (matched.length > 0) return matched;
+  } catch (err) {
+    console.warn('[Daily Ledger] Error reading ledger for', targetDate, err);
+  }
+  return [];
+}
 
 export function persistDb() {
   try {
@@ -275,7 +450,35 @@ export function persistDb() {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(DB_FILE_PATH, JSON.stringify(db, null, 2), 'utf8');
+
+    const content = JSON.stringify(db, null, 2);
+    const tmpFile = `${DB_FILE_PATH}.${Date.now()}.${Math.random().toString(36).substring(2, 6)}.tmp`;
+    fs.writeFileSync(tmpFile, content, 'utf8');
+    // Save backup if DB has active tables or historical sales
+    if (db.tables && db.tables.length > 0) {
+      try {
+        fs.copyFileSync(tmpFile, BACKUP_FILE_PATH);
+      } catch {}
+    }
+
+    // Atomic replace on Windows with retry loop
+    let renamed = false;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        fs.renameSync(tmpFile, DB_FILE_PATH);
+        renamed = true;
+        break;
+      } catch {
+        const start = Date.now();
+        while (Date.now() - start < 15) {}
+      }
+    }
+    if (!renamed) {
+      try { fs.writeFileSync(DB_FILE_PATH, content, 'utf8'); } catch {}
+    }
+    try {
+      if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
+    } catch {}
   } catch (err) {
     console.error('[Database Engine] Failed to persist state to disk:', err);
   }
@@ -283,31 +486,71 @@ export function persistDb() {
 
 export function loadDbFromDisk() {
   try {
-    if (fs.existsSync(DB_FILE_PATH)) {
-      const raw = fs.readFileSync(DB_FILE_PATH, 'utf8');
+    let sourcePath = DB_FILE_PATH;
+    if (!fs.existsSync(sourcePath) && fs.existsSync(BACKUP_FILE_PATH)) {
+      sourcePath = BACKUP_FILE_PATH;
+    }
+    if (fs.existsSync(sourcePath)) {
+      let raw = fs.readFileSync(sourcePath, 'utf8');
+      if (raw.charCodeAt(0) === 0xFEFF) {
+        raw = raw.slice(1); // Strip Windows PowerShell UTF-8 BOM
+      }
       const loaded = JSON.parse(raw);
       if (loaded && Array.isArray(loaded.tables)) {
-        db.tables = loaded.tables;
-        db.orders = loaded.orders || [];
-        db.kitchenTickets = loaded.kitchenTickets || [];
-        db.menuCategories = loaded.menuCategories || [];
-        db.staffUsers = loaded.staffUsers || [];
-        db.loginSessions = loaded.loginSessions || [];
-        db.staffActivityLogs = loaded.staffActivityLogs || [];
-        if (loaded.historicalSales) db.historicalSales = loaded.historicalSales;
+        // Strip any legacy/test tables and dishes so shop handover starts 100% clean
+        db.tables = loaded.tables.filter((t: any) => !['T1A', 'T1B', 'T2A', 'T2B'].includes(t.tableCode) && !t.id?.includes('t1a') && !t.displayName?.includes('Verandah'));
+        db.orders = [];
+        db.kitchenTickets = [];
+        db.menuCategories = (loaded.menuCategories || []).filter((c: any) => c.name !== 'Kerala Specials' && !c.items?.some((it: any) => it.name === 'Idli' || it.name === 'Chicken 65'));
+        db.masterPin = loaded.masterPin || '8181';
+        db.staffUsers = Array.isArray(loaded.staffUsers) ? loaded.staffUsers : [];
+        db.loginSessions = [];
+        db.staffActivityLogs = [];
+        db.historicalSales = loaded.historicalSales || [];
         db.currentBusinessDate = loaded.currentBusinessDate;
-        db.dailyOrderSequence = loaded.dailyOrderSequence || 0;
-        db.dailyInvoiceSequence = loaded.dailyInvoiceSequence || 0;
-        console.log('[Database Engine] Successfully restored restaurant database from disk:', DB_FILE_PATH);
+        db.dailyOrderSequence = 0;
+        db.dailyInvoiceSequence = 0;
+        console.log('[Database Engine] Successfully restored restaurant database from disk:', sourcePath);
       }
+    }
+
+    // Always synchronize and merge historicalSales with immutable daily ledgers on disk
+    const allDiskLedgers = readAllDailyLedgers();
+    const existingCodes = new Set((db.historicalSales || []).map((s) => s.invoiceNumber || s.orderCode || s.id));
+    for (const dItem of allDiskLedgers) {
+      const code = dItem.invoiceNumber || dItem.orderCode || dItem.id;
+      if (code && !existingCodes.has(code)) {
+        existingCodes.add(code);
+        db.historicalSales.push(dItem);
+      }
+    }
+    if (db.historicalSales.length > 0) {
+      console.log(`[Database Engine] Synchronized ${db.historicalSales.length} historical sales from permanent daily ledgers.`);
     }
   } catch (err) {
     console.warn('[Database Engine] Could not load from disk, initialized empty:', err);
+    if (fs.existsSync(BACKUP_FILE_PATH)) {
+      try {
+        let bRaw = fs.readFileSync(BACKUP_FILE_PATH, 'utf8');
+        if (bRaw.charCodeAt(0) === 0xFEFF) {
+          bRaw = bRaw.slice(1);
+        }
+        const bLoaded = JSON.parse(bRaw);
+        if (bLoaded && Array.isArray(bLoaded.tables)) {
+          db.tables = bLoaded.tables;
+          db.orders = bLoaded.orders || [];
+          db.menuCategories = bLoaded.menuCategories || [];
+          db.masterPin = bLoaded.masterPin || '';
+          db.historicalSales = bLoaded.historicalSales || [];
+          console.log('[Database Engine] Recovered database state from backup file:', BACKUP_FILE_PATH);
+        }
+      } catch {}
+    }
   }
 }
 
 export function checkAndPerformDailyReset() {
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = getIstDateString(); // ALWAYS USE IST!
   if (!db.currentBusinessDate) {
     db.currentBusinessDate = todayStr;
     db.dailyOrderSequence = 0;
@@ -315,14 +558,37 @@ export function checkAndPerformDailyReset() {
     persistDb();
   } else if (db.currentBusinessDate !== todayStr) {
     console.log(`[Day Reset] Advancing business date from ${db.currentBusinessDate} to ${todayStr}`);
+    
+    // Automatically archive paid orders to daily ledger before day rollover
+    const paidOrders = (db.orders || []).filter((o) => o.paymentStatus === 'PAID');
+    for (const po of paidOrders) {
+      appendToDailyLedger({
+        invoiceNumber: (po as any).invoiceNumber || `INV-${po.customerCode.replace('#', '')}`,
+        orderCode: po.customerCode,
+        tableCode: po.tableCode,
+        roomName: (db.tables || []).find((t) => t.tableCode === po.tableCode)?.roomName || 'Dining Area',
+        grandTotalPaise: po.grandTotalPaise,
+        paymentMode: po.paymentMode || 'CASH',
+        settledAt: po.paidAt || po.createdAt || new Date().toISOString(),
+        cashier: po.cashierName || 'Cashier',
+        items: po.items || [],
+        itemsSummary: (po.items || []).map((i: any) => `${i.itemName} X ${i.quantity}`).join(', '),
+      });
+    }
+
     db.currentBusinessDate = todayStr;
     db.dailyOrderSequence = 0;
     db.dailyInvoiceSequence = 0;
-    // Clear active running tables
+    db.kitchenTickets = [];
+    db.orders = [];
+    
+    // PERMANENT TABLE REGISTRATION: Tables & rooms are permanent fixtures and NEVER wiped.
+    // Only daily operational states (running balances and order occupancy) reset for the new business day.
     db.tables.forEach(t => {
       t.status = 'AVAILABLE';
       t.unpaidCount = 0;
       t.unpaidTotalPaise = 0;
+      t.roomName = t.roomName || 'Dining Area';
     });
     persistDb();
   }
@@ -332,33 +598,42 @@ export const db = global.__ITHIPOORAM_DB__;
 loadDbFromDisk();
 checkAndPerformDailyReset();
 
+export function getMasterPin(): string {
+  return (db.masterPin || '').trim();
+}
+
+export function isMasterPinSet(): boolean {
+  return Boolean(db.masterPin && db.masterPin.trim().length >= 4);
+}
+
+export function setMasterPin(newPin: string): boolean {
+  const clean = (newPin || '').trim();
+  if (clean.length < 4) return false;
+  db.masterPin = clean;
+  persistDb();
+  return true;
+}
+
+export function verifyMasterPin(inputPin: string): boolean {
+  const clean = (inputPin || '').trim();
+  if (!clean) return false;
+  const current = getMasterPin();
+  if (!current) return false;
+  return clean === current;
+}
+
 // Helper to recalculate table unpaid totals
 export function refreshTableSummaries() {
-  // 1. Ensure any table with orders is registered in db.tables
-  const knownCodes = new Set(db.tables.map((t) => (t.tableCode || '').toUpperCase()));
-  for (const ord of db.orders) {
-    const code = (ord.tableCode || '').toUpperCase();
-    if (code && !knownCodes.has(code)) {
-      db.tables.push({
-        id: `t-${code.toLowerCase()}-${Date.now()}`,
-        tableCode: code,
-        displayName: ord.tableName || `Table ${code}`,
-        capacity: 4,
-        status: 'AVAILABLE',
-        unpaidCount: 0,
-        unpaidTotalPaise: 0,
-      });
-      knownCodes.add(code);
-    }
-  }
-
-  // 2. Recalculate unpaid totals and table occupancy status case-insensitively
+  // Recalculate unpaid totals and table occupancy status case-insensitively
+  // NOTE: In a real-world restaurant, tables are registered permanently by the shopkeeper.
+  // We do NOT auto-inject ghost tables for arbitrary or test order tableCodes.
   for (const table of db.tables) {
+    table.roomName = table.roomName || 'Dining Area';
     const tableOrders = db.orders.filter(
       (o) => (o.tableCode || '').toUpperCase() === (table.tableCode || '').toUpperCase() && o.paymentStatus === 'UNPAID'
     );
     table.unpaidCount = tableOrders.length;
-    table.unpaidTotalPaise = tableOrders.reduce((sum, o) => sum + o.grandTotalPaise, 0);
+    table.unpaidTotalPaise = tableOrders.reduce((sum, o) => sum + (o.grandTotalPaise || 0), 0);
 
     if (table.unpaidCount > 0) {
       const hasReady = tableOrders.some((o) => o.fulfillmentStatus === 'READY' || o.fulfillmentStatus === 'SERVED');
@@ -370,5 +645,145 @@ export function refreshTableSummaries() {
   persistDb();
 }
 
-// Automatically load persisted database from disk on module initialisation
-loadDbFromDisk();
+
+/**
+ * Helper to get current date parts in Indian Standard Time (IST)
+ */
+export function getIstDateTime(): {
+  datePrefix: string; // YYYYMMDD, e.g. "20261115"
+  dateStr: string;    // DD/MM/YYYY, e.g. "15/11/2026"
+  timeStr: string;    // hh:mm AM/PM, e.g. "12:55 PM"
+  isoString: string;
+} {
+  const now = new Date();
+  const istFormatter = new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+  const parts = istFormatter.formatToParts(now);
+  const getVal = (type: string) => parts.find((p) => p.type === type)?.value || '';
+  const yyyy = getVal('year');
+  const mm = getVal('month');
+  const dd = getVal('day');
+  const hour = getVal('hour');
+  const minute = getVal('minute');
+  const dayPeriod = (getVal('dayPeriod') || '').toUpperCase();
+
+  const datePrefix = `${yyyy}${mm}${dd}`;
+  const dateStr = `${dd}/${mm}/${yyyy}`;
+  const timeStr = `${hour}:${minute} ${dayPeriod}`.trim();
+
+  return {
+    datePrefix,
+    dateStr,
+    timeStr,
+    isoString: now.toISOString(),
+  };
+}
+
+/**
+ * Generates the synchronized sequential invoice number for today:
+ * Format: YYYYMMDD-001, YYYYMMDD-002, etc.
+ * Resets each day at midnight IST.
+ */
+export function generateDailySequentialInvoiceNumber(): {
+  invoiceNumber: string;
+  dateStr: string;
+  timeStr: string;
+} {
+  checkAndPerformDailyReset();
+  const { datePrefix, dateStr, timeStr } = getIstDateTime();
+
+  let maxSeq = db.dailyInvoiceSequence || 0;
+  for (const h of db.historicalSales || []) {
+    if (h.invoiceNumber && h.invoiceNumber.startsWith(`${datePrefix}-`)) {
+      const parts = h.invoiceNumber.split('-');
+      if (parts.length === 2) {
+        const num = parseInt(parts[1], 10);
+        if (!isNaN(num) && num > maxSeq) {
+          maxSeq = num;
+        }
+      }
+    }
+  }
+
+  const nextSeq = maxSeq + 1;
+  db.dailyInvoiceSequence = nextSeq;
+  persistDb();
+
+  const invoiceNumber = `${datePrefix}-${String(nextSeq).padStart(3, '0')}`;
+  return { invoiceNumber, dateStr, timeStr };
+}
+
+/**
+ * Formats a clean 58mm thermal receipt text strictly adhering to requirements:
+ * 1. Brand name calligraphy heading: ഇത്തിപ്പൂരം / ITHI POORAM
+ * 2. ONLY the place name under that: Vanchiyoor, Trivandrum (No GSTIN, no extra lines)
+ * 3. Daily synced invoice number (YYYYMMDD-001)
+ * 4. Date and Time
+ * 5. Table name
+ * 6. Cashier name
+ * 7. Items (name, qty, rate, total)
+ * 8. NO TAXES (Zero GST, no tax breakdown)
+ * 9. Grand Total
+ * 10. Payment Type
+ * 11. Footer: Malayalam & English thank you (നന്ദി! വീണ്ടും വരിക / Thank You! Visit Again)
+ */
+export function formatIthiPooramThermalReceipt({
+  invoiceNumber,
+  dateStr,
+  timeStr,
+  tableName,
+  cashierName,
+  items,
+  grandTotalPaise,
+  paymentMode,
+}: {
+  invoiceNumber: string;
+  dateStr: string;
+  timeStr: string;
+  tableName: string;
+  cashierName: string;
+  items: Array<{ name: string; qty: number; pricePaise: number; lineTotalPaise: number }>;
+  grandTotalPaise: number;
+  paymentMode: string;
+}): string {
+  const grandTotal = (grandTotalPaise / 100).toFixed(2);
+
+  const formattedItems = items.map((i) => {
+    const rawName = (i.name || 'Dish').trim();
+    const name = rawName.length > 16 ? rawName.substring(0, 16) : rawName.padEnd(16);
+    const qty = String(i.qty).padStart(3);
+    const rate = (i.pricePaise / 100).toFixed(0).padStart(5);
+    const tot = (i.lineTotalPaise / 100).toFixed(0).padStart(5);
+    return `${name} ${qty} ${rate} ${tot}`;
+  }).join('\n');
+
+  return [
+    '================================',
+    '          ഇത്തിപ്പൂരം',
+    '          ITHI POORAM',
+    '     Vanchiyoor, Trivandrum',
+    '================================',
+    `Inv: ${invoiceNumber}`,
+    `Date: ${dateStr}  Time: ${timeStr}`,
+    `Table: ${tableName}`,
+    `Cashier: ${cashierName}`,
+    '--------------------------------',
+    'ITEM             QTY  RATE TOTAL',
+    '--------------------------------',
+    formattedItems,
+    '--------------------------------',
+    `GRAND TOTAL:           ₹${grandTotal.padStart(8)}`,
+    `Payment: [${(paymentMode || 'CASH').toUpperCase()}]`,
+    '================================',
+    '      നന്ദി! വീണ്ടും വരിക',
+    '     Thank You! Visit Again',
+    '================================',
+  ].join('\n');
+}

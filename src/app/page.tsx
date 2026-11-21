@@ -14,6 +14,7 @@ import {
   ChevronDown, 
   RefreshCw, 
   UserPlus, 
+  ShieldCheck,
   ArrowUpRight, 
   LogOut, 
   Menu as MenuIcon,
@@ -27,7 +28,9 @@ import {
   Receipt,
   ShoppingBag,
   Minus,
-  Search
+  Search,
+  Printer,
+  Lock
 } from 'lucide-react';
 import { apiRequest, getCurrentUser } from '../lib/api';
 
@@ -50,6 +53,8 @@ export default function RootHomePage() {
   const [isDayCloseModalOpen, setIsDayCloseModalOpen] = useState(false);
   const [dayCloseLoading, setDayCloseLoading] = useState(false);
   const [dayCloseSummary, setDayCloseSummary] = useState<any | null>(null);
+  const [dayClosePin, setDayClosePin] = useState('');
+  const [dayClosePinError, setDayClosePinError] = useState<string | null>(null);
 
   // Waiter Manual Order Desk Modal State (for dine-in guests without smartphone/QR)
   const [isWaiterOrderModalOpen, setIsWaiterOrderModalOpen] = useState(false);
@@ -87,6 +92,60 @@ export default function RootHomePage() {
     return waiterCart.reduce((acc, it) => acc + (it.pricePaise * it.qty), 0);
   }, [waiterCart]);
 
+  // Quick Direct Bill & Print Modal State
+  const [isDirectBillModalOpen, setIsDirectBillModalOpen] = useState(false);
+  const [directBillSearch, setDirectBillSearch] = useState('');
+  const [directBillCart, setDirectBillCart] = useState<Array<{ id: string; name: string; malayalamName?: string; pricePaise: number; qty: number }>>([]);
+  const [directBillPaymentMode, setDirectBillPaymentMode] = useState<'CASH' | 'UPI'>('CASH');
+  const [directBillOrderType, setDirectBillOrderType] = useState<'DINE_IN' | 'TAKEAWAY'>('TAKEAWAY');
+  const [directBillTableCode, setDirectBillTableCode] = useState<string>('');
+  const [isPreviewingDirectBill, setIsPreviewingDirectBill] = useState(false);
+  const [isPrintingDirectBill, setIsPrintingDirectBill] = useState(false);
+  const [directBillNotice, setDirectBillNotice] = useState<string | null>(null);
+  const [printedDirectReceiptText, setPrintedDirectReceiptText] = useState<string | null>(null);
+  const [lastSettledInvoice, setLastSettledInvoice] = useState<any | null>(null);
+
+  // Quick Direct Bill Cashier Authorization States
+  const [isHomeDirectAuthOpen, setIsHomeDirectAuthOpen] = useState(false);
+  const [homeStaffUsers, setHomeStaffUsers] = useState<any[]>([]);
+  const [homeAuthorizer, setHomeAuthorizer] = useState<{ id: string; name: string; type: 'ADMIN' | 'STAFF' }>({
+    id: 'ADMIN',
+    name: 'Administrator (Master PIN)',
+    type: 'ADMIN',
+  });
+  const [homeAuthPin, setHomeAuthPin] = useState('');
+  const [homeAuthPinError, setHomeAuthPinError] = useState<string | null>(null);
+
+  // Load registered staff for Cashier Authorization
+  useEffect(() => {
+    fetch('/api/staff/sessions')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d?.staff && Array.isArray(d.staff)) {
+          setHomeStaffUsers(d.staff);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const availableDayDishes = useMemo(() => {
+    return allDishes.filter((d: any) => d.isAvailable !== false);
+  }, [allDishes]);
+
+  const filteredDirectBillDishes = useMemo(() => {
+    if (!directBillSearch.trim()) return availableDayDishes;
+    const q = directBillSearch.toLowerCase();
+    return availableDayDishes.filter((d: any) => 
+      (d.name && d.name.toLowerCase().includes(q)) || 
+      (d.malayalamName && d.malayalamName.toLowerCase().includes(q)) ||
+      (d.categoryName && d.categoryName.toLowerCase().includes(q))
+    );
+  }, [availableDayDishes, directBillSearch]);
+
+  const directBillTotalPaise = useMemo(() => {
+    return directBillCart.reduce((acc, it) => acc + (it.pricePaise * it.qty), 0);
+  }, [directBillCart]);
+
   // Auth Guard
   useEffect(() => {
     const user = getCurrentUser();
@@ -102,7 +161,7 @@ export default function RootHomePage() {
     try {
       setLoading(true);
       // Fetch real-time overview metrics & timeline for selected range
-      const res = await apiRequest(`/admin/overview?range=${selectedRange}`);
+      const res = await apiRequest(`/admin/overview?range=${encodeURIComponent(selectedRange)}&date=${encodeURIComponent(selectedRange)}`);
       setData(res);
 
       // Fetch running (UNPAID / Active) orders
@@ -115,11 +174,11 @@ export default function RootHomePage() {
 
           setRunningOrders((prev) => {
             const activeFresh = (Array.isArray(ordList) ? ordList : []).filter(
-              (o) => !settledSet.has(o.id) && !settledSet.has(o.customerCode) && o.paymentStatus !== 'PAID'
+              (o) => !settledSet.has(o.id) && o.paymentStatus !== 'PAID'
             );
             if (activeFresh.length === 0 && prev.length > 0) {
               const stillUnsettled = prev.filter(
-                (o) => !settledSet.has(o.id) && !settledSet.has(o.customerCode) && o.paymentStatus !== 'PAID'
+                (o) => !settledSet.has(o.id) && o.paymentStatus !== 'PAID'
               );
               if (stillUnsettled.length > 0) return stillUnsettled;
             }
@@ -133,25 +192,10 @@ export default function RootHomePage() {
         const tblRes = await fetch('/api/tables');
         if (tblRes.ok) {
           const tblList = await tblRes.json();
-          if (Array.isArray(tblList) && tblList.length > 0) {
+          if (Array.isArray(tblList)) {
             setTables(tblList);
             if (typeof window !== 'undefined') {
               localStorage.setItem('ithipooram_custom_tables', JSON.stringify(tblList));
-            }
-          } else if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem('ithipooram_custom_tables');
-            if (saved) {
-              try {
-                const parsed = JSON.parse(saved);
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                  setTables(parsed);
-                  fetch('/api/tables', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tables: parsed }),
-                  }).catch(() => {});
-                }
-              } catch (e) {}
             }
           }
         }
@@ -174,6 +218,17 @@ export default function RootHomePage() {
   };
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedTables = localStorage.getItem('ithipooram_custom_tables');
+      if (savedTables && (savedTables.includes('T1A') || savedTables.includes('t-t1a-ac') || savedTables.includes('AC Room'))) {
+        localStorage.removeItem('ithipooram_custom_tables');
+      }
+      const savedMenu = localStorage.getItem('ithipooram_menu_categories');
+      if (savedMenu && (savedMenu.includes('Chicken 65') || savedMenu.includes('Kerala Specials') || savedMenu.includes('Idli'))) {
+        localStorage.removeItem('ithipooram_menu_categories');
+        localStorage.removeItem('ithipooram_custom_menu_dishes');
+      }
+    }
     loadDashboardData();
     const interval = setInterval(loadDashboardData, 4000);
     return () => clearInterval(interval);
@@ -185,6 +240,12 @@ export default function RootHomePage() {
       setWaiterSelectedTable(tables[0].tableCode || 'T1');
     }
     setWaiterNotice(null);
+    fetch('/api/menu', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((mData) => {
+        if (Array.isArray(mData)) setMenuCategories(mData);
+      })
+      .catch(() => {});
     setIsWaiterOrderModalOpen(true);
   };
 
@@ -194,7 +255,8 @@ export default function RootHomePage() {
       if (existing) {
         return prev.map((i) => (i.id === item.id ? { ...i, qty: i.qty + 1 } : i));
       }
-      return [...prev, { id: item.id, name: item.name, malayalamName: item.malayalamName, pricePaise: item.pricePaise || 12000, qty: 1 }];
+      const itemPricePaise = item.pricePaise !== undefined ? item.pricePaise : (item.priceInr !== undefined ? Math.round(item.priceInr * 100) : 0);
+      return [...prev, { id: item.id, name: item.name, malayalamName: item.malayalamName, pricePaise: itemPricePaise, qty: 1 }];
     });
   };
 
@@ -254,6 +316,128 @@ export default function RootHomePage() {
     }
   };
 
+  // Quick Direct Bill Handlers
+  const handleOpenDirectBillModal = () => {
+    setDirectBillNotice(null);
+    setDirectBillSearch('');
+    setIsPreviewingDirectBill(false);
+    setDirectBillOrderType('TAKEAWAY');
+    setDirectBillTableCode('');
+    fetch('/api/menu', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((mData) => {
+        if (Array.isArray(mData)) setMenuCategories(mData);
+      })
+      .catch(() => {});
+    setIsDirectBillModalOpen(true);
+  };
+
+  const handleDirectBillAddItem = (item: any) => {
+    setDirectBillCart((prev) => {
+      const existing = prev.find((i) => i.id === item.id);
+      if (existing) {
+        return prev.map((i) => (i.id === item.id ? { ...i, qty: i.qty + 1 } : i));
+      }
+      return [
+        ...prev,
+        {
+          id: item.id,
+          name: item.name,
+          malayalamName: item.malayalamName,
+          pricePaise: item.pricePaise !== undefined ? item.pricePaise : (item.priceInr !== undefined ? Math.round(item.priceInr * 100) : 0),
+          qty: 1,
+        },
+      ];
+    });
+  };
+
+  const handleDirectBillRemoveItem = (itemId: string) => {
+    setDirectBillCart((prev) => {
+      const existing = prev.find((i) => i.id === itemId);
+      if (existing && existing.qty > 1) {
+        return prev.map((i) => (i.id === itemId ? { ...i, qty: i.qty - 1 } : i));
+      }
+      return prev.filter((i) => i.id !== itemId);
+    });
+  };
+
+  const handleOpenHomeDirectAuth = () => {
+    if (directBillCart.length === 0) {
+      alert('Please select at least one dish.');
+      return;
+    }
+    setHomeAuthPin('');
+    setHomeAuthPinError(null);
+    setIsDirectBillModalOpen(false);
+    setIsHomeDirectAuthOpen(true);
+  };
+
+  const handleConfirmHomeDirectAuth = async () => {
+    if (!homeAuthPin || homeAuthPin.length < 4) {
+      setHomeAuthPinError(
+        homeAuthorizer.type === 'ADMIN'
+          ? 'Enter 4-digit Master Security PIN'
+          : `Enter 4-digit PIN for ${homeAuthorizer.name}`
+      );
+      return;
+    }
+
+    try {
+      setIsPrintingDirectBill(true);
+      setHomeAuthPinError(null);
+
+      const res = await fetch('/api/billing/quick-bill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: directBillCart,
+          paymentMode: directBillPaymentMode,
+          orderType: directBillOrderType,
+          tableCode: directBillTableCode,
+          tableName: directBillOrderType === 'TAKEAWAY' ? 'Takeaway' : (directBillTableCode ? `Table ${directBillTableCode}` : 'Dine-In'),
+          cashierName: homeAuthorizer.name,
+          cashierId: homeAuthorizer.id,
+          authType: homeAuthorizer.type,
+          pin: homeAuthPin,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to authorize bill');
+      }
+
+      setPrintedDirectReceiptText(data.thermalReceipt);
+      setLastSettledInvoice(data.invoice || {
+        invoiceNumber: data.invoiceNumber,
+        grandTotalPaise: data.grandTotalPaise,
+        paymentMode: directBillPaymentMode,
+        items: [...directBillCart],
+        cashierName: homeAuthorizer.name,
+        dateStr: data.dateStr,
+        timeStr: data.timeStr,
+      });
+
+      // Close auth modal and direct bill modal, and open bill preview!
+      setIsHomeDirectAuthOpen(false);
+      setIsDirectBillModalOpen(false);
+      setIsPreviewingDirectBill(true);
+
+      const totalInr = (data.grandTotalPaise / 100).toFixed(2);
+      const printStatusText = data.btPrintStatus === 'SUCCESS' ? '✓ Printed via SEZNIK Bluetooth' : '✓ Bill Generated & Ready';
+      setDirectBillNotice(`${printStatusText} (Inv #${data.invoiceNumber} • ₹${totalInr})`);
+
+      // Refresh overview dashboard so real-time sales graph & KPIs immediately reflect this sale
+      loadDashboardData();
+    } catch (err: any) {
+      setHomeAuthPinError(err.message || 'Authorization failed');
+    } finally {
+      setIsPrintingDirectBill(false);
+    }
+  };
+
+  const handleDirectBillPrint = handleOpenHomeDirectAuth;
+
   const handleSignOut = () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('ithipooram_user');
@@ -298,9 +482,18 @@ export default function RootHomePage() {
 
   // Close Business Day (Generates Excel & Archives)
   const handleExecuteDayClose = async () => {
+    if (!dayClosePin || dayClosePin.length < 4) {
+      setDayClosePinError('Enter 4-digit Master Security PIN');
+      return;
+    }
     try {
       setDayCloseLoading(true);
-      const res = await fetch('/api/admin/day-close', { method: 'POST' });
+      setDayClosePinError(null);
+      const res = await fetch('/api/admin/day-close', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminPin: dayClosePin }),
+      });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success) {
         setDayCloseSummary(data.summary);
@@ -320,10 +513,10 @@ export default function RootHomePage() {
 
         await loadDashboardData();
       } else {
-        alert(data.error || data.message || 'Failed to close day');
+        setDayClosePinError(data.error || data.message || 'Failed to close day');
       }
     } catch (e: any) {
-      alert(e.message || 'Error closing day');
+      setDayClosePinError(e.message || 'Error closing day');
     } finally {
       setDayCloseLoading(false);
     }
@@ -383,13 +576,25 @@ export default function RootHomePage() {
     });
   }, [graphTimeline, chartMetric]);
 
+  const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number; val: number; label?: string } | null>(null);
+
   const maxGraphValue = useMemo(() => {
     const m = Math.max(...graphValues);
-    if (m > 0) return Math.ceil(m * 1.15);
-    return chartMetric === 'orders' ? 10 : 2000;
+    if (m > 0) {
+      if (chartMetric === 'orders') {
+        return Math.max(m, 4);
+      }
+      return Math.ceil((m * 1.2) / 50) * 50;
+    }
+    return chartMetric === 'orders' ? 5 : 1000;
   }, [graphValues, chartMetric]);
 
   const yAxisTicks = useMemo(() => {
+    if (chartMetric === 'orders') {
+      const top = maxGraphValue;
+      const step = Math.max(1, Math.round(top / 4));
+      return [step * 4, step * 3, step * 2, step, 0];
+    }
     return [
       maxGraphValue,
       Math.round(maxGraphValue * 0.75),
@@ -397,7 +602,7 @@ export default function RootHomePage() {
       Math.round(maxGraphValue * 0.25),
       0,
     ];
-  }, [maxGraphValue]);
+  }, [maxGraphValue, chartMetric]);
 
   const formatTick = (val: number) => {
     if (chartMetric === 'orders') return `${val}`;
@@ -535,11 +740,19 @@ export default function RootHomePage() {
           </Link>
         </nav>
 
-        {/* Bottom Actions: + Add Order Button & Restaurant Profile */}
-        <div className="p-4 border-t border-zinc-800/80 space-y-3">
+        {/* Bottom Actions: Print Bill & + Add Order Button & Restaurant Profile */}
+        <div className="p-4 border-t border-zinc-800/80 space-y-2">
+          <button
+            onClick={handleOpenDirectBillModal}
+            className="w-full flex items-center justify-center space-x-2 py-3 px-4 rounded-2xl bg-white hover:bg-zinc-100 text-black font-black text-xs shadow-md transition active:scale-98 cursor-pointer"
+          >
+            <Printer className="w-4 h-4 text-emerald-600" />
+            <span>Print Bill</span>
+          </button>
+
           <button
             onClick={handleOpenWaiterOrderModal}
-            className="w-full flex items-center justify-center py-3 px-4 rounded-2xl border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-white font-extrabold text-xs shadow-sm transition active:scale-98 cursor-pointer"
+            className="w-full flex items-center justify-center py-2.5 px-4 rounded-2xl border border-zinc-700 bg-zinc-900 hover:bg-zinc-800 text-white font-extrabold text-xs shadow-sm transition active:scale-98 cursor-pointer"
           >
             <span>+ Add Order</span>
           </button>
@@ -579,10 +792,25 @@ export default function RootHomePage() {
 
         <div className="flex items-center space-x-2">
           <button
-            onClick={handleOpenWaiterOrderModal}
-            className="px-4 py-2 rounded-xl bg-white text-black font-black text-xs cursor-pointer shadow-xs active:scale-95"
+            type="button"
+            onClick={handleOpenDirectBillModal}
+            className="px-3 py-1.5 rounded-xl bg-white hover:bg-zinc-100 text-black font-black text-xs flex items-center space-x-1.5 shadow-xs cursor-pointer active:scale-95"
+            title="Direct Quick Billing & Thermal Print"
           >
-            <span>+ Add Order</span>
+            <Printer className="w-3.5 h-3.5 text-black" />
+            <span>Print Bill</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setWaiterNotice(null);
+              setIsWaiterOrderModalOpen(true);
+            }}
+            className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-black text-xs flex items-center space-x-1.5 shadow-xs cursor-pointer active:scale-95"
+            title="Create Customer Table Order"
+          >
+            <Plus className="w-3.5 h-3.5 text-white" />
+            <span>Add Order</span>
           </button>
         </div>
       </header>
@@ -612,26 +840,28 @@ export default function RootHomePage() {
             </div>
           </div>
 
-          <div className="flex items-center space-x-2.5">
+          <div className="flex items-center space-x-2">
             <Link
               href="/kitchen"
               className="px-3.5 py-2.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-900 border border-orange-200 text-xs font-black flex items-center space-x-1.5 transition shadow-xs"
               title="Open Kitchen Display System"
             >
               <ChefHat className="w-3.5 h-3.5 text-orange-600" />
-              <span className="hidden sm:inline">Kitchen (KDS)</span>
+              <span>Kitchen (KDS)</span>
             </Link>
 
             <button
               onClick={() => {
                 setDayCloseSummary(null);
+                setDayClosePin('');
+                setDayClosePinError(null);
                 setIsDayCloseModalOpen(true);
               }}
               className="px-4 py-2.5 rounded-xl bg-black hover:bg-zinc-800 text-white text-xs font-black flex items-center space-x-2 transition shadow-md cursor-pointer active:scale-98"
               title="Close business day and export Excel document"
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-              <span>Close Day (End of Shift / Z-Report)</span>
+              <span>Close Day of Shift</span>
             </button>
 
             <button
@@ -729,19 +959,36 @@ export default function RootHomePage() {
             
             {/* Graph Header: Range Dropdown & Metric Filters */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-zinc-100">
-              <div className="relative inline-block text-left">
-                <select
-                  value={selectedRange}
-                  onChange={(e: any) => setSelectedRange(e.target.value)}
-                  className="appearance-none bg-zinc-50 border border-zinc-200 text-xs font-extrabold text-black py-2 pl-3.5 pr-8 rounded-xl focus:outline-none focus:border-black cursor-pointer"
-                >
-                  <option value="today">Today</option>
-                  <option value="7days">Last 7 Days</option>
-                  <option value="month">This Month</option>
-                  <option value="all">All time</option>
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-zinc-600">
-                  <ChevronDown className="w-3.5 h-3.5" />
+              <div className="flex items-center space-x-2">
+                <div className="relative inline-block text-left">
+                  <select
+                    value={selectedRange}
+                    onChange={(e: any) => setSelectedRange(e.target.value)}
+                    className="appearance-none bg-zinc-50 border border-zinc-200 text-xs font-extrabold text-black py-2 pl-3.5 pr-8 rounded-xl focus:outline-none focus:border-black cursor-pointer shadow-xs"
+                  >
+                    <option value="today">Today</option>
+                    <option value="yesterday">Yesterday</option>
+                    <option value="7days">Last 7 Days</option>
+                    <option value="month">This Month</option>
+                    <option value="all">All time</option>
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-zinc-600">
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-bold text-black shadow-xs">
+                  <Calendar className="w-3.5 h-3.5 text-zinc-500" />
+                  <input
+                    type="date"
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        setSelectedRange(e.target.value as any);
+                      }
+                    }}
+                    className="bg-transparent font-bold text-xs text-black cursor-pointer outline-none"
+                    title="Pick any specific date from calendar"
+                  />
                 </div>
               </div>
 
@@ -820,20 +1067,41 @@ export default function RootHomePage() {
                       />
                     )}
 
-                    {/* Real-time Data Points */}
+                    {/* Interactive Real-time Data Points & Touch Targets */}
                     {svgCoordinates.points.map((pt: { x: number; y: number; val: number; label?: string }, i: number) => (
-                      <g key={i}>
+                      <g 
+                        key={i} 
+                        className="cursor-pointer"
+                        onMouseEnter={() => setHoveredPoint(pt)}
+                        onTouchStart={() => setHoveredPoint(pt)}
+                      >
+                        {/* Invisible larger touch target */}
+                        <circle cx={pt.x} cy={pt.y} r={14} fill="transparent" />
                         <circle
                           cx={pt.x}
                           cy={pt.y}
-                          r={pt.val > 0 ? 4.5 : 3}
-                          fill={pt.val > 0 ? '#0F172A' : '#94A3B8'}
+                          r={hoveredPoint?.x === pt.x ? 6 : pt.val > 0 ? 4.5 : 3}
+                          fill={hoveredPoint?.x === pt.x ? '#EA580C' : pt.val > 0 ? '#0F172A' : '#94A3B8'}
                           stroke="#FFFFFF"
-                          strokeWidth="2"
+                          strokeWidth={hoveredPoint?.x === pt.x ? 3 : 2}
+                          className="transition-all duration-150"
                         />
                       </g>
                     ))}
                   </svg>
+
+                  {/* Dynamic Tooltip Badge */}
+                  {hoveredPoint && (
+                    <div 
+                      className="absolute -top-7 -translate-x-1/2 bg-black text-white px-2.5 py-1 rounded-xl text-[10px] font-black shadow-lg pointer-events-none whitespace-nowrap animate-in fade-in zoom-in-95 duration-100 flex items-center space-x-1.5 z-20"
+                      style={{ left: `${(hoveredPoint.x / 480) * 100}%` }}
+                    >
+                      <span className="text-zinc-400">{hoveredPoint.label}:</span>
+                      <span className="text-white">
+                        {chartMetric === 'orders' ? `${hoveredPoint.val} Orders` : `₹ ${hoveredPoint.val}`}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -847,27 +1115,27 @@ export default function RootHomePage() {
 
           </div>
 
-          {/* RIGHT COLUMN: Add Staff Securely + Top Selling Items */}
+          {/* RIGHT COLUMN: Master Security + Top Selling Items */}
           <div className="space-y-6">
             
-            {/* Widget 1: Add Staff Securely Card (White, Black & Grey Theme) */}
+            {/* Widget 1: System Security Status Card */}
             <div className="bg-white rounded-3xl p-5 sm:p-6 border border-zinc-200 shadow-xs relative overflow-hidden">
               <div className="flex items-center space-x-2 mb-2">
-                <span className="w-3 h-1.5 rounded-full bg-black inline-block" />
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-500">Access Control</span>
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block animate-pulse" />
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-500">Master Database Security</span>
               </div>
 
-              <h3 className="text-base font-black text-black">Add Staff Securely</h3>
+              <h3 className="text-base font-black text-black">Terminal Protected</h3>
               <p className="text-xs font-semibold text-zinc-500 mt-1 mb-5">
-                Add staff with roles (Cashier, Chef, Manager), bill anywhere &amp; stay in sync.
+                Master Security PIN active. POS screens automatically re-authenticate when phone sleeps or turns off.
               </p>
 
               <Link
-                href="/users"
+                href="/users#security"
                 className="w-full py-2.5 px-4 rounded-2xl border-2 border-black hover:bg-black hover:text-white text-black font-extrabold text-xs flex items-center justify-center space-x-2 transition shadow-xs cursor-pointer active:scale-98"
               >
-                <UserPlus className="w-3.5 h-3.5" />
-                <span>Add Staff</span>
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Security &amp; PIN Settings</span>
               </Link>
             </div>
 
@@ -909,118 +1177,6 @@ export default function RootHomePage() {
 
         </div>
 
-        {/* ============================================================== */}
-        {/* RUNNING ORDERS SECTION (After one scroll down)                   */}
-        {/* ============================================================== */}
-        <section className="bg-white rounded-3xl border border-zinc-200 p-5 sm:p-6 shadow-xs space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-zinc-100">
-            <div>
-              <h2 className="text-base sm:text-lg font-black text-black">Running Orders</h2>
-              <p className="text-xs font-semibold text-zinc-500">
-                Orders you take will show up here live until they&apos;re billed &amp; paid.
-              </p>
-            </div>
-
-            <button
-              onClick={handleOpenWaiterOrderModal}
-              className="inline-flex items-center justify-center py-2 px-4 rounded-xl border border-zinc-300 hover:border-black text-black font-extrabold text-xs transition cursor-pointer"
-            >
-              <span>+ Add Order</span>
-            </button>
-          </div>
-
-          {/* Running Orders Table or Empty State */}
-          {runningOrders.length === 0 ? (
-            <div className="py-12 flex flex-col items-center justify-center text-center space-y-3">
-              <div className="w-14 h-14 rounded-2xl bg-zinc-100 flex items-center justify-center text-zinc-400">
-                <ChefHat className="w-7 h-7" />
-              </div>
-              <div>
-                <h4 className="text-sm font-black text-black">No Running orders</h4>
-                <p className="text-xs font-semibold text-zinc-400 mt-1 max-w-sm">
-                  Orders placed by customers via table QR or entered from the POS terminal will appear here in real-time.
-                </p>
-              </div>
-              <button
-                onClick={handleOpenWaiterOrderModal}
-                className="px-5 py-2.5 rounded-2xl border-2 border-black hover:bg-black hover:text-white text-black font-black text-xs transition cursor-pointer"
-              >
-                + Add Order
-              </button>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-zinc-700">
-                <thead className="bg-zinc-50 text-[10px] font-extrabold uppercase tracking-wider text-zinc-500 border-y border-zinc-200">
-                  <tr>
-                    <th className="py-3 px-4">Table</th>
-                    <th className="py-3 px-4">Ticket</th>
-                    <th className="py-3 px-4">Items Summary</th>
-                    <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-4 text-right">Amount</th>
-                    <th className="py-3 px-4 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100">
-                  {runningOrders.map((ord: any) => (
-                    <tr key={ord.id} className="hover:bg-zinc-50/70 transition">
-                      <td className="py-3.5 px-4">
-                        <span className="px-2.5 py-1 rounded-xl bg-black text-white font-mono font-black text-xs">
-                          {ord.tableCode}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 font-mono font-bold text-zinc-800">
-                        {ord.customerCode || ord.id.slice(-6)}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="font-semibold text-zinc-900">
-                          {ord.items?.map((it: any) => `${it.quantity}x ${it.itemName}`).join(', ') || 'Kerala Dishes'}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-zinc-100 text-zinc-800 border border-zinc-300">
-                          {ord.fulfillmentStatus || 'PREPARING'}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-right font-mono font-black text-black text-sm">
-                        {formatRupees(ord.grandTotalPaise || ord.subtotalPaise)}
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        <Link
-                          href="/billing"
-                          className="px-3 py-1.5 rounded-xl bg-black hover:bg-zinc-800 text-white font-black text-xs transition inline-flex items-center space-x-1"
-                        >
-                          <span>Settle Bill</span>
-                          <ArrowUpRight className="w-3 h-3" />
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* Free tables bottom status pill (Only visible when admin adds tables) */}
-          {tables.length > 0 && (
-            <div className="pt-3 border-t border-zinc-100 flex flex-wrap items-center gap-2">
-              <span className="text-xs font-bold text-zinc-500">Free tables:</span>
-              {freeTables.length === 0 ? (
-                <span className="text-xs font-semibold text-zinc-400">All tables occupied</span>
-              ) : (
-                freeTables.map((t) => (
-                  <span
-                    key={t.id || t.tableCode}
-                    className="px-2.5 py-1 rounded-xl bg-zinc-100 border border-zinc-200 font-mono text-[11px] font-extrabold text-zinc-700"
-                  >
-                    {t.tableCode?.toLowerCase() || t.displayName?.toLowerCase()}
-                  </span>
-                ))
-              )}
-            </div>
-          )}
-        </section>
-
       </main>
 
       {/* Day Close Modal */}
@@ -1061,16 +1217,42 @@ export default function RootHomePage() {
                   </div>
                 </div>
 
+                {/* Master PIN Authorization */}
+                <div className="pt-1 text-left space-y-1.5">
+                  <label className="text-xs font-black text-black block">
+                    Authorize with Master Security PIN:
+                  </label>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={dayClosePin}
+                    onChange={(e) => {
+                      setDayClosePin(e.target.value);
+                      setDayClosePinError(null);
+                    }}
+                    placeholder="Master Security PIN"
+                    className="w-full text-center text-sm font-mono font-black tracking-widest py-2.5 px-3 rounded-xl bg-zinc-50 border border-zinc-300 focus:outline-none focus:border-black text-black"
+                  />
+                  {dayClosePinError && (
+                    <p className="text-[11px] text-red-600 font-bold">{dayClosePinError}</p>
+                  )}
+                </div>
+
                 <div className="flex space-x-2 pt-2">
                   <button
-                    onClick={() => setIsDayCloseModalOpen(false)}
+                    onClick={() => {
+                      setIsDayCloseModalOpen(false);
+                      setDayClosePin('');
+                      setDayClosePinError(null);
+                    }}
                     className="flex-1 py-3 rounded-2xl border border-zinc-200 text-xs font-bold text-zinc-600 hover:bg-zinc-50 cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleExecuteDayClose}
-                    disabled={dayCloseLoading}
+                    disabled={dayCloseLoading || dayClosePin.length < 4}
                     className="flex-1 py-3 rounded-2xl bg-black hover:bg-zinc-800 text-white font-black text-xs flex items-center justify-center space-x-1.5 shadow-md cursor-pointer disabled:opacity-50"
                   >
                     {dayCloseLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
@@ -1227,7 +1409,7 @@ export default function RootHomePage() {
                             <p className="text-[10px] text-zinc-500 truncate">{dish.malayalamName}</p>
                           )}
                           <p className="text-[11px] font-mono font-bold text-black mt-0.5">
-                            ₹{Math.round((dish.pricePaise || dish.priceInr * 100 || 12000) / 100)}
+                            ₹{Math.round((dish.pricePaise !== undefined ? dish.pricePaise : (dish.priceInr ? dish.priceInr * 100 : 0)) / 100)}
                           </p>
                         </div>
 
@@ -1329,6 +1511,576 @@ export default function RootHomePage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* 5. DIRECT QUICK PRINT BILL MODAL (Touch-Friendly Menu Selection) */}
+      {/* ============================================================== */}
+      {isDirectBillModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border border-zinc-200 flex flex-col max-h-[92dvh] overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3.5 border-b border-zinc-100 shrink-0">
+              <div className="flex items-center space-x-2.5">
+                <div className="w-9 h-9 rounded-xl bg-black text-white flex items-center justify-center">
+                  <Printer className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-black">Direct Print Bill</h3>
+                  <p className="text-[11px] font-semibold text-zinc-500">
+                    Select dishes available today and print bill directly
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setDirectBillCart([]);
+                  setIsDirectBillModalOpen(false);
+                }}
+                className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 hover:text-black flex items-center justify-center transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto py-3 space-y-3.5 pr-1">
+              {/* Notice Banner */}
+              {directBillNotice && (
+                <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Check className="w-4 h-4 shrink-0 text-emerald-600" />
+                    <span>{directBillNotice}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        window.print();
+                      }
+                    }}
+                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-black uppercase tracking-wider cursor-pointer"
+                  >
+                    Reprint
+                  </button>
+                </div>
+              )}
+
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400 pointer-events-none" />
+                <input
+                  type="text"
+                  value={directBillSearch}
+                  onChange={(e) => setDirectBillSearch(e.target.value)}
+                  placeholder="Search available dish / വിഭവം തിരയുക..."
+                  className="w-full pl-9 pr-14 py-2.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-semibold focus:outline-none focus:border-black text-zinc-900"
+                />
+                {directBillSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setDirectBillSearch('')}
+                    className="absolute right-3 top-2.5 text-zinc-400 hover:text-black text-xs font-bold cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {/* Dishes Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto p-1 border border-zinc-100 rounded-2xl bg-zinc-50/50">
+                {filteredDirectBillDishes.length === 0 ? (
+                  <div className="col-span-full py-10 text-center text-xs text-zinc-400 font-semibold">
+                    No available dishes found for today.
+                  </div>
+                ) : (
+                  filteredDirectBillDishes.map((dish: any) => {
+                    const inCart = directBillCart.find((c) => c.id === dish.id);
+                    return (
+                      <div
+                        key={dish.id}
+                        onClick={() => handleDirectBillAddItem(dish)}
+                        className={`p-2.5 rounded-xl border transition cursor-pointer flex items-center justify-between select-none ${
+                          inCart
+                            ? 'bg-zinc-50 border-black ring-1 ring-black'
+                            : 'bg-white border-zinc-200 hover:border-zinc-400'
+                        }`}
+                      >
+                        <div className="truncate pr-2">
+                          <p className="text-xs font-extrabold text-zinc-900 truncate">{dish.name}</p>
+                          {dish.malayalamName && (
+                            <p className="text-[10px] text-zinc-500 truncate">{dish.malayalamName}</p>
+                          )}
+                          <p className="text-[11px] font-mono font-black text-black mt-0.5">
+                            ₹{Math.round((dish.pricePaise || (dish.priceInr ? dish.priceInr * 100 : 0)) / 100)}
+                          </p>
+                        </div>
+
+                        {inCart ? (
+                          <div 
+                            className="flex items-center space-x-1.5 bg-black text-white px-2 py-1 rounded-lg shrink-0"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleDirectBillRemoveItem(dish.id)}
+                              className="w-5 h-5 flex items-center justify-center hover:bg-zinc-800 rounded font-black text-sm"
+                            >
+                              -
+                            </button>
+                            <span className="text-xs font-mono font-black px-1">{inCart.qty}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleDirectBillAddItem(dish)}
+                              className="w-5 h-5 flex items-center justify-center hover:bg-zinc-800 rounded font-black text-sm"
+                            >
+                              +
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDirectBillAddItem(dish);
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-zinc-100 hover:bg-black hover:text-white text-zinc-800 font-extrabold text-xs transition cursor-pointer shrink-0"
+                          >
+                            + Add
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Selected Items & Total */}
+              {directBillCart.length > 0 && (
+                <div className="p-3.5 bg-zinc-50 rounded-2xl border border-zinc-200 space-y-2.5">
+                  <div className="flex items-center justify-between text-xs font-extrabold text-zinc-800 pb-1.5 border-b border-zinc-200">
+                    <span className="flex items-center space-x-1.5">
+                      <ShoppingBag className="w-3.5 h-3.5" />
+                      <span>Selected Items ({directBillCart.reduce((a, b) => a + b.qty, 0)})</span>
+                    </span>
+                    <span className="font-mono font-black text-sm text-black">
+                      Total: ₹{(directBillTotalPaise / 100).toFixed(2)}
+                    </span>
+                  </div>
+
+                  <div className="max-h-28 overflow-y-auto space-y-1.5 text-xs pr-1">
+                    {directBillCart.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between text-zinc-700 bg-white p-2 rounded-xl border border-zinc-200/60">
+                        <div className="truncate pr-2">
+                          <span className="font-bold text-zinc-900">{item.name}</span>
+                          <span className="text-[11px] text-zinc-500 font-mono ml-2">
+                            ({item.qty} × ₹{(item.pricePaise / 100).toFixed(0)})
+                          </span>
+                        </div>
+                        <div className="flex items-center space-x-2 shrink-0 font-mono">
+                          <span className="font-black text-black">₹{((item.pricePaise * item.qty) / 100).toFixed(2)}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleDirectBillRemoveItem(item.id)}
+                            className="text-zinc-400 hover:text-red-600 p-0.5 transition cursor-pointer"
+                            title="Remove"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Order Type Selection: Dine In vs Takeaway */}
+                  <div className="pt-2 border-t border-zinc-200/80 space-y-1.5">
+                    <span className="text-xs font-black text-zinc-700 uppercase tracking-wider block">Order Type</span>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => setDirectBillOrderType('TAKEAWAY')}
+                        className={`flex-1 py-2 px-3 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center space-x-1.5 ${
+                          directBillOrderType === 'TAKEAWAY'
+                            ? 'bg-black text-white shadow-xs'
+                            : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+                        }`}
+                      >
+                        <span>🛍️ Takeaway</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDirectBillOrderType('DINE_IN')}
+                        className={`flex-1 py-2 px-3 rounded-xl text-xs font-black transition cursor-pointer flex items-center justify-center space-x-1.5 ${
+                          directBillOrderType === 'DINE_IN'
+                            ? 'bg-black text-white shadow-xs'
+                            : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200'
+                        }`}
+                      >
+                        <span>🍽️ Dine-In</span>
+                      </button>
+                    </div>
+
+                    {/* Optional table selector for Dine-In */}
+                    {directBillOrderType === 'DINE_IN' && tables.length > 0 && (
+                      <div className="pt-1.5">
+                        <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
+                          Select Dine-In Table:
+                        </label>
+                        <select
+                          value={directBillTableCode}
+                          onChange={(e) => setDirectBillTableCode(e.target.value)}
+                          className="w-full py-2 px-3 rounded-xl bg-white border border-zinc-300 font-bold text-xs text-black focus:outline-none focus:border-black"
+                        >
+                          <option value="">Counter Table / General Dine-In</option>
+                          {tables.map((t) => (
+                            <option key={t.tableCode} value={t.tableCode}>
+                              {t.displayName || `Table ${t.tableCode}`} ({t.roomName || 'Dining Area'})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Payment Mode Selector */}
+                  <div className="flex items-center justify-between pt-2 border-t border-zinc-200/80">
+                    <span className="text-xs font-black text-zinc-700 uppercase tracking-wider">Payment Mode</span>
+                    <div className="flex items-center space-x-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setDirectBillPaymentMode('CASH')}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer ${
+                          directBillPaymentMode === 'CASH'
+                            ? 'bg-black text-white shadow-xs'
+                            : 'bg-zinc-200/70 text-zinc-700 hover:bg-zinc-200'
+                        }`}
+                      >
+                        💵 Cash
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDirectBillPaymentMode('UPI')}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer ${
+                          directBillPaymentMode === 'UPI'
+                            ? 'bg-black text-white shadow-xs'
+                            : 'bg-zinc-200/70 text-zinc-700 hover:bg-zinc-200'
+                        }`}
+                      >
+                        📱 UPI
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-3 border-t border-zinc-100 flex items-center space-x-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setDirectBillCart([]);
+                  setIsDirectBillModalOpen(false);
+                }}
+                className="py-3 px-4 rounded-2xl border border-zinc-200 text-xs font-bold text-zinc-600 hover:bg-zinc-50 cursor-pointer transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleOpenHomeDirectAuth}
+                disabled={directBillCart.length === 0}
+                className="flex-1 py-3 px-5 rounded-2xl bg-black hover:bg-zinc-800 text-white font-black text-xs flex items-center justify-center space-x-2 shadow-lg cursor-pointer disabled:opacity-40 transition active:scale-98"
+              >
+                <Lock className="w-4 h-4 text-emerald-400" />
+                <span>
+                  Authorize &amp; Settle {directBillCart.length > 0 ? `(₹${(directBillTotalPaise / 100).toFixed(2)})` : ''}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Direct Bill Cashier Authorization Modal (Home Screen) */}
+      {isHomeDirectAuthOpen && (
+        <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-5 sm:p-6 shadow-2xl border border-zinc-200 text-center animate-in zoom-in-95 duration-150 my-auto">
+            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-zinc-100 text-black flex items-center justify-center mx-auto mb-2.5">
+              <Lock className="w-5 h-5 sm:w-6 sm:h-6" />
+            </div>
+            <h3 className="text-base sm:text-lg font-black text-black">Cashier Authorization</h3>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Select authorizing user and enter PIN to settle bill (₹{(directBillTotalPaise / 100).toFixed(2)}).
+            </p>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleConfirmHomeDirectAuth();
+              }}
+              className="mt-3.5 space-y-3"
+            >
+              {homeAuthPinError && (
+                <div className="p-2.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-semibold text-left">
+                  {homeAuthPinError}
+                </div>
+              )}
+
+              {/* Select Who is Authorizing */}
+              <div className="text-left space-y-1">
+                <label className="block text-[11px] font-black uppercase text-zinc-700 tracking-wider">
+                  Authorizing Person:
+                </label>
+                <select
+                  value={homeAuthorizer.id}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setHomeAuthPinError(null);
+                    setHomeAuthPin('');
+                    if (val === 'ADMIN') {
+                      setHomeAuthorizer({ id: 'ADMIN', name: 'Administrator (Master PIN)', type: 'ADMIN' });
+                    } else {
+                      const st = homeStaffUsers.find((s: any) => s.id === val);
+                      if (st) {
+                        setHomeAuthorizer({ id: st.id, name: st.fullName || st.username, type: 'STAFF' });
+                      }
+                    }
+                  }}
+                  className="w-full py-2.5 px-3 rounded-xl bg-zinc-50 border-2 border-zinc-300 font-bold text-xs text-black focus:outline-none focus:border-black cursor-pointer"
+                >
+                  <option value="ADMIN">👑 Administrator (Master PIN)</option>
+                  {homeStaffUsers.map((st: any) => (
+                    <option key={st.id} value={st.id}>
+                      👤 {st.fullName || st.username} ({st.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* PIN Entering Area with Native Keyboard Support (No on-screen keypad) */}
+              <div className="py-2">
+                <label className="block text-[11px] font-bold text-zinc-700 mb-1.5 uppercase tracking-wider">
+                  {homeAuthorizer.type === 'ADMIN'
+                    ? 'Enter 4-Digit Master Security PIN:'
+                    : `Enter PIN for ${homeAuthorizer.name}:`}
+                </label>
+                <div className="relative inline-block">
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    enterKeyHint="done"
+                    maxLength={6}
+                    value={homeAuthPin}
+                    onChange={(e) => setHomeAuthPin(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleConfirmHomeDirectAuth();
+                      }
+                    }}
+                    placeholder="••••"
+                    className="w-44 text-center text-3xl tracking-[0.4em] font-mono py-2.5 px-3 rounded-2xl border-2 border-black focus:outline-none bg-white text-black font-black shadow-inner"
+                    autoFocus
+                  />
+                </div>
+                <p className="text-[10px] text-zinc-500 font-semibold mt-1">
+                  {homeAuthorizer.type === 'ADMIN'
+                    ? 'Master Security PIN required to confirm settlement'
+                    : `Each staff member must authorize with their own registered PIN`}
+                </p>
+              </div>
+
+              {/* Modal Buttons */}
+              <div className="flex space-x-2 pt-2">
+                <button
+                  type="button"
+                  disabled={isPrintingDirectBill}
+                  onClick={() => {
+                    setIsHomeDirectAuthOpen(false);
+                    setIsDirectBillModalOpen(true);
+                  }}
+                  className="flex-1 py-3 rounded-xl text-xs font-bold bg-zinc-100 text-zinc-700 hover:bg-zinc-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isPrintingDirectBill || homeAuthPin.length < 4}
+                  className="flex-1 py-3 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50 cursor-pointer shadow-md transition active:scale-98"
+                >
+                  {isPrintingDirectBill ? 'Authorizing...' : 'Authorize & Print Bill 👁️'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Real Bill Preview Modal (Matching /billing Preview Screen) */}
+      {isPreviewingDirectBill && (
+        <div className="fixed inset-0 z-60 bg-black/85 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-zinc-200 flex flex-col max-h-[94dvh] overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-150">
+            {/* Preview Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-100 shrink-0">
+              <div className="flex items-center space-x-2">
+                <Receipt className="w-5 h-5 text-black" />
+                <h3 className="text-sm font-black text-black">Official Bill Preview</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPreviewingDirectBill(false)}
+                className="w-7 h-7 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 hover:text-black flex items-center justify-center transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Receipt Slip Preview (Exact /billing Slip Style) */}
+            <div className="flex-1 overflow-y-auto py-3">
+              <div className="bg-white text-black p-5 rounded-2xl border border-zinc-300 shadow-sm font-mono text-xs max-w-[340px] mx-auto space-y-3">
+                <div className="text-center space-y-1">
+                  <img
+                    src="/brand-calligraphy-cropped.png"
+                    alt="ഇത്തിപ്പൂരം"
+                    className="h-10 w-auto mx-auto object-contain"
+                  />
+                  <p className="text-[10px] tracking-widest text-zinc-500 font-bold">VANCHIYOOR, TRIVANDRUM</p>
+                </div>
+
+                <div className="border-t border-dashed border-zinc-300 pt-2 text-[11px] space-y-0.5">
+                  <div className="flex justify-between">
+                    <span>Inv: {lastSettledInvoice?.invoiceNumber || 'INV-SETTLED'}</span>
+                    <span>{lastSettledInvoice?.timeStr || new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Date: {lastSettledInvoice?.dateStr || new Date().toLocaleDateString('en-GB')}</span>
+                    <span className="font-bold">
+                      {directBillOrderType === 'TAKEAWAY' ? 'Takeaway' : (directBillTableCode ? `Table: ${directBillTableCode}` : 'Dine-In')}
+                    </span>
+                  </div>
+                  <div>
+                    <span>Cashier: {lastSettledInvoice?.cashierName || homeAuthorizer.name}</span>
+                  </div>
+                </div>
+
+                <div className="border-t border-dashed border-zinc-300 pt-2">
+                  <div className="flex justify-between font-bold text-[10px] uppercase text-zinc-500 pb-1 border-b border-zinc-200">
+                    <span className="w-2/5">ITEM</span>
+                    <span className="w-1/6 text-center">QTY</span>
+                    <span className="w-1/5 text-right">RATE</span>
+                    <span className="w-1/5 text-right">TOTAL</span>
+                  </div>
+                  <div className="divide-y divide-zinc-100 pt-1">
+                    {directBillCart.map((it) => (
+                      <div key={it.id} className="flex justify-between py-1 text-[11px]">
+                        <span className="w-2/5 truncate">{it.name}</span>
+                        <span className="w-1/6 text-center">{it.qty}</span>
+                        <span className="w-1/5 text-right">₹{(it.pricePaise / 100).toFixed(0)}</span>
+                        <span className="w-1/5 text-right font-bold">₹{((it.pricePaise * it.qty) / 100).toFixed(0)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="border-t-2 border-zinc-900 pt-2 space-y-1">
+                  <div className="flex justify-between text-base font-black text-black">
+                    <span>GRAND TOTAL:</span>
+                    <span>₹{(directBillTotalPaise / 100).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-[11px] text-zinc-600">
+                    <span>Payment:</span>
+                    <span className="font-bold uppercase">[{directBillPaymentMode}]</span>
+                  </div>
+                </div>
+
+                <div className="border-t border-dashed border-zinc-300 pt-3 text-center space-y-0.5">
+                  <p className="font-bold text-xs">നന്ദി! വീണ്ടും വരിക</p>
+                  <p className="text-[10px] text-zinc-500 tracking-wider">THANK YOU! VISIT AGAIN</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Preview Footer Actions */}
+            <div className="pt-3 border-t border-zinc-100 flex items-center space-x-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setDirectBillCart([]);
+                  setLastSettledInvoice(null);
+                  setIsPreviewingDirectBill(false);
+                }}
+                className="py-3 px-4 rounded-2xl bg-zinc-100 hover:bg-zinc-200 text-xs font-bold text-zinc-900 cursor-pointer transition active:scale-95"
+              >
+                Close &amp; Done ✓
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (printedDirectReceiptText) {
+                    await fetch('/api/printer/print', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        receiptText: printedDirectReceiptText,
+                        receiptData: lastSettledInvoice,
+                        printerName: 'B-41',
+                      }),
+                    }).catch(() => {});
+                  }
+                  if (typeof window !== 'undefined') {
+                    window.print();
+                  }
+                }}
+                disabled={isPrintingDirectBill}
+                className="flex-1 py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs flex items-center justify-center space-x-2 shadow-md cursor-pointer disabled:opacity-50 transition active:scale-98"
+              >
+                <Printer className="w-4 h-4" />
+                <span>🖨️ Print Receipt</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Embedded 58mm Thermal Receipt for Browser/Direct Physical Printing */}
+      {printedDirectReceiptText && (
+        <div id="printable-direct-receipt" className="hidden print:block" aria-hidden="true">
+          <style>{`
+            @media print {
+              @page {
+                size: 58mm auto;
+                margin: 0;
+              }
+              body {
+                margin: 0;
+                padding: 0;
+                background: #fff;
+                color: #000;
+              }
+              body * {
+                visibility: hidden !important;
+              }
+              #printable-direct-receipt, #printable-direct-receipt * {
+                visibility: visible !important;
+              }
+              #printable-direct-receipt {
+                position: absolute !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 58mm !important;
+                display: block !important;
+                font-family: monospace !important;
+                font-size: 11px !important;
+                line-height: 1.25 !important;
+                white-space: pre-wrap !important;
+                padding: 4px 6px !important;
+              }
+            }
+          `}</style>
+          <pre>{printedDirectReceiptText}</pre>
         </div>
       )}
     </div>

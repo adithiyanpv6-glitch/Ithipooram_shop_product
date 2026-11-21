@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { db, refreshTableSummaries, persistDb } from '@/lib/serverDb';
+import { db, refreshTableSummaries, persistDb, getIstDateString, readDailyLedger, appendToDailyLedger, verifyMasterPin } from '@/lib/serverDb';
+import { generateUnifiedMasterDatabaseXml } from '@/lib/masterExcelDatabase';
 import fs from 'fs';
 import path from 'path';
 
@@ -15,119 +16,97 @@ export async function OPTIONS() {
 
 export async function POST(request: Request) {
   try {
-    const todayStr = db.currentBusinessDate || new Date().toISOString().slice(0, 10);
-    const todayOrders = db.orders.filter(
-      (o) => o.createdAt.startsWith(todayStr) || o.paidAt?.startsWith(todayStr)
-    );
+    let adminPin = '';
+    try {
+      const body = await request.json();
+      adminPin = body.adminPin || body.pin || '';
+    } catch {}
 
-    const paidOrders = todayOrders.filter((o) => o.paymentStatus === 'PAID');
-    const totalSalesPaise = paidOrders.reduce((sum, o) => sum + o.grandTotalPaise, 0);
-    const cashPaise = paidOrders
-      .filter((o) => o.paymentMode === 'CASH')
+    // Strict Security: Master Security PIN required to close business day
+    if (!adminPin || !verifyMasterPin(adminPin)) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized. Valid 4-digit Master Security PIN is required to close shift.' },
+        { status: 403, headers: corsHeaders }
+      );
+    }
+
+    const todayStr = db.currentBusinessDate || getIstDateString();
+    
+    // Combine paid orders from memory, historical sales, and permanent disk daily ledger
+    const ledgerSales = readDailyLedger(todayStr);
+    const dayHistorical = (db.historicalSales || []).filter((s) => getIstDateString(s.settledAt) === todayStr);
+    const todayOrders = (db.orders || []).filter((o) => {
+      const d = getIstDateString(o.paidAt || o.createdAt || '');
+      return d === todayStr && o.paymentStatus === 'PAID';
+    });
+
+    const knownCodes = new Set<string>();
+    const combinedPaid: Array<{
+      orderCode: string;
+      tableCode: string;
+      paymentMode: string;
+      grandTotalPaise: number;
+      items: any[];
+    }> = [];
+
+    for (const item of [...ledgerSales, ...dayHistorical]) {
+      const code = item.orderCode || item.invoiceNumber;
+      if (code && !knownCodes.has(code)) {
+        knownCodes.add(code);
+        combinedPaid.push({
+          orderCode: item.orderCode || item.invoiceNumber,
+          tableCode: item.tableCode || 'T1A',
+          paymentMode: item.paymentMode || 'CASH',
+          grandTotalPaise: item.grandTotalPaise || 0,
+          items: item.items || [],
+        });
+      }
+    }
+
+    for (const o of todayOrders) {
+      if (!knownCodes.has(o.customerCode)) {
+        knownCodes.add(o.customerCode);
+        combinedPaid.push({
+          orderCode: o.customerCode,
+          tableCode: o.tableCode,
+          paymentMode: o.paymentMode || 'CASH',
+          grandTotalPaise: o.grandTotalPaise || 0,
+          items: o.items || [],
+        });
+      }
+    }
+
+    const totalSalesPaise = combinedPaid.reduce((sum, o) => sum + o.grandTotalPaise, 0);
+    const cashPaise = combinedPaid
+      .filter((o) => (o.paymentMode || '').toUpperCase() === 'CASH')
       .reduce((sum, o) => sum + o.grandTotalPaise, 0);
-    const upiPaise = paidOrders
-      .filter((o) => o.paymentMode === 'UPI')
+    const upiPaise = combinedPaid
+      .filter((o) => (o.paymentMode || '').toUpperCase() === 'UPI')
       .reduce((sum, o) => sum + o.grandTotalPaise, 0);
 
     // Item movement summary
     const itemMap: Record<string, { name: string; qty: number; totalPaise: number }> = {};
-    for (const o of paidOrders) {
+    for (const o of combinedPaid) {
       for (const it of o.items) {
-        if (!itemMap[it.itemName]) {
-          itemMap[it.itemName] = { name: it.itemName, qty: 0, totalPaise: 0 };
+        const name = it.itemName || it.name || 'Dish';
+        const qty = it.quantity || it.qty || 1;
+        const total = it.lineTotalPaise || (it.pricePaise ? it.pricePaise * qty : 0);
+        if (!itemMap[name]) {
+          itemMap[name] = { name, qty: 0, totalPaise: 0 };
         }
-        itemMap[it.itemName].qty += it.quantity;
-        itemMap[it.itemName].totalPaise += it.lineTotalPaise;
+        itemMap[name].qty += qty;
+        itemMap[name].totalPaise += total;
       }
     }
 
     const itemSummary = Object.values(itemMap);
 
     const excelFileName = `Daily_Report_${todayStr}.xls`;
+    const xlsContent = generateUnifiedMasterDatabaseXml(todayStr, combinedPaid, db.tables, db.staffUsers);
 
-    const itemRowsXml = itemSummary
-      .map(
-        (it) => `      <Row ss:Height="20">
-        <Cell ss:StyleID="DataLeft"><Data ss:Type="String">${it.name}</Data></Cell>
-        <Cell ss:StyleID="DataCenter"><Data ss:Type="Number">${it.qty}</Data></Cell>
-        <Cell ss:StyleID="DataRight"><Data ss:Type="Number">${(it.totalPaise / 100).toFixed(2)}</Data></Cell>
-      </Row>`
-      )
-      .join('\n');
-
-    const invoiceRowsXml = paidOrders
-      .map(
-        (o) => `      <Row ss:Height="20">
-        <Cell ss:StyleID="DataCenter"><Data ss:Type="String">${o.customerCode}</Data></Cell>
-        <Cell ss:StyleID="DataCenter"><Data ss:Type="String">${o.tableCode}</Data></Cell>
-        <Cell ss:StyleID="DataCenter"><Data ss:Type="String">${o.paymentMode || 'CASH'}</Data></Cell>
-        <Cell ss:StyleID="DataRight"><Data ss:Type="Number">${(o.grandTotalPaise / 100).toFixed(2)}</Data></Cell>
-      </Row>`
-      )
-      .join('\n');
-
-    const xlsContent = `<?xml version="1.0" encoding="UTF-8"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
- <Styles>
-  <Style ss:ID="Default" ss:Name="Normal">
-   <Alignment ss:Vertical="Center"/>
-   <Font ss:FontName="Calibri" ss:Size="11" ss:Color="#000000"/>
-  </Style>
-  <Style ss:ID="Title">
-   <Font ss:FontName="Calibri" ss:Size="15" ss:Bold="1" ss:Color="#111827"/>
-  </Style>
-  <Style ss:ID="Header">
-   <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/>
-   <Interior ss:Color="#1F2937" ss:Pattern="Solid"/>
-   <Alignment ss:Horizontal="Center"/>
-  </Style>
-  <Style ss:ID="DataLeft"><Alignment ss:Horizontal="Left"/></Style>
-  <Style ss:ID="DataCenter"><Alignment ss:Horizontal="Center"/></Style>
-  <Style ss:ID="DataRight"><Alignment ss:Horizontal="Right"/></Style>
- </Styles>
-
- <Worksheet ss:Name="Day_Summary">
-  <Table ss:DefaultColumnWidth="140">
-   <Row ss:Height="30"><Cell ss:StyleID="Title"><Data ss:Type="String">ITHI POORAM - DAILY CLOSING REPORT (${todayStr})</Data></Cell></Row>
-   <Row ss:Height="20"><Cell ss:StyleID="DataLeft"><Data ss:Type="String">Total Paid Orders:</Data></Cell><Cell ss:StyleID="DataRight"><Data ss:Type="Number">${paidOrders.length}</Data></Cell></Row>
-   <Row ss:Height="20"><Cell ss:StyleID="DataLeft"><Data ss:Type="String">Gross Revenue (INR):</Data></Cell><Cell ss:StyleID="DataRight"><Data ss:Type="Number">${(totalSalesPaise / 100).toFixed(2)}</Data></Cell></Row>
-   <Row ss:Height="20"><Cell ss:StyleID="DataLeft"><Data ss:Type="String">Cash Revenue (INR):</Data></Cell><Cell ss:StyleID="DataRight"><Data ss:Type="Number">${(cashPaise / 100).toFixed(2)}</Data></Cell></Row>
-   <Row ss:Height="20"><Cell ss:StyleID="DataLeft"><Data ss:Type="String">UPI Revenue (INR):</Data></Cell><Cell ss:StyleID="DataRight"><Data ss:Type="Number">${(upiPaise / 100).toFixed(2)}</Data></Cell></Row>
-  </Table>
- </Worksheet>
-
- <Worksheet ss:Name="Item_Movement">
-  <Table ss:DefaultColumnWidth="120">
-   <Row ss:Height="22">
-    <Cell ss:StyleID="Header"><Data ss:Type="String">Dish Name</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">Qty Sold</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">Revenue (INR)</Data></Cell>
-   </Row>
-${itemRowsXml}
-  </Table>
- </Worksheet>
-
- <Worksheet ss:Name="Bills_Register">
-  <Table ss:DefaultColumnWidth="120">
-   <Row ss:Height="22">
-    <Cell ss:StyleID="Header"><Data ss:Type="String">Order Ref</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">Table</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">Mode</Data></Cell>
-    <Cell ss:StyleID="Header"><Data ss:Type="String">Amount (INR)</Data></Cell>
-   </Row>
-${invoiceRowsXml}
-  </Table>
- </Worksheet>
-</Workbook>`;
-
-    // Safe file writing (works on local Windows AND tolerates Vercel read-only system)
+    // Local Master Excel Report Archival to Laptop Disk
     try {
-      const isVercel = process.env.VERCEL === '1' || (process.env.NODE_ENV === 'production' && !process.env.LOCAL_DEV);
-      const targetDir = isVercel ? '/tmp/reports_archive' : path.join(process.cwd(), 'reports_archive');
+      const targetDir = path.join(process.cwd(), 'reports_archive');
       if (!fs.existsSync(targetDir)) {
         fs.mkdirSync(targetDir, { recursive: true });
       }
@@ -141,6 +120,40 @@ ${invoiceRowsXml}
       t.status = 'AVAILABLE';
       t.unpaidCount = 0;
       t.unpaidTotalPaise = 0;
+    }
+
+    // Safely archive any remaining unsettled orders to the permanent ledger before wiping live queue
+    const remainingUnpaid = (db.orders || []).filter((o) => o.paymentStatus !== 'PAID');
+    for (const uo of remainingUnpaid) {
+      appendToDailyLedger({
+        invoiceNumber: `VOID-${uo.customerCode}`,
+        orderCode: uo.customerCode,
+        tableCode: uo.tableCode,
+        roomName: (db.tables || []).find((t) => t.tableCode === uo.tableCode)?.roomName || 'Dining Area',
+        grandTotalPaise: uo.grandTotalPaise || 0,
+        paymentMode: 'VOID_AT_DAY_CLOSE',
+        settledAt: new Date().toISOString(),
+        cashier: 'System Day Close',
+        items: uo.items || [],
+        itemsSummary: (uo.items || []).map((i: any) => `${i.itemName} X ${i.quantity}`).join(', '),
+      });
+    }
+
+    // Refresh Kitchen Display (KDS) & active orders for tomorrow morning - completely fresh queue
+    db.kitchenTickets = [];
+    db.orders = [];
+
+    // Replenish menu dish stock for tomorrow morning
+    if (Array.isArray(db.menuCategories)) {
+      for (const cat of db.menuCategories) {
+        if (!Array.isArray(cat.items)) continue;
+        for (const item of cat.items) {
+          item.isAvailable = true;
+          if (typeof item.currentStock === 'number' && item.currentStock <= 5) {
+            item.currentStock = 50;
+          }
+        }
+      }
     }
 
     db.auditLogs.unshift({
@@ -160,7 +173,7 @@ ${invoiceRowsXml}
       message: `Day ${todayStr} closed successfully. Excel ready.`,
       summary: {
         date: todayStr,
-        totalOrders: paidOrders.length,
+        totalOrders: combinedPaid.length,
         totalSalesPaise,
         cashPaise,
         upiPaise,

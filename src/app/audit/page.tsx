@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 export default function AuditPageRedirect() {
   const router = useRouter();
   useEffect(() => {
-    router.replace('/admin');
+    router.replace('/');
   }, [router]);
   return null;
 }

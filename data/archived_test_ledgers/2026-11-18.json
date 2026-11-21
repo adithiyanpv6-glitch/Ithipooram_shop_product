@@ -1,0 +1,1191 @@
+[
+  {
+    "id": "hist-1794978611069",
+    "invoiceNumber": "20261118-001",
+    "orderCode": "T1A-01",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T05:10:11.069Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1794978586772-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1794978934454",
+    "invoiceNumber": "20261118-002",
+    "orderCode": "T1B-01",
+    "tableCode": "T1B",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "UPI",
+    "settledAt": "2026-11-18T05:15:34.454Z",
+    "cashier": "Rahul Nair",
+    "items": [
+      {
+        "id": "it-1794978835224-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1794984289156",
+    "invoiceNumber": "20261118-003",
+    "orderCode": "T99-01",
+    "tableCode": "T99",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T06:44:49.156Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1794984289007-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-quick-1794984289944",
+    "invoiceNumber": "20261118-004",
+    "orderCode": "DIR-20261118-004",
+    "tableCode": "TAKEAWAY",
+    "roomName": "Takeaway Desk",
+    "grandTotalPaise": 4500,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T06:44:49.944Z",
+    "cashier": "Rahul Nair",
+    "items": [
+      {
+        "itemName": "Kerala Parotta",
+        "quantity": 3,
+        "pricePaise": 1500,
+        "lineTotalPaise": 4500
+      }
+    ],
+    "itemsSummary": "Kerala Parotta X 3"
+  },
+  {
+    "id": "hist-1794984290088",
+    "invoiceNumber": "20261118-005",
+    "orderCode": "T2A-44",
+    "tableCode": "T2A",
+    "roomName": "Garden",
+    "grandTotalPaise": 28000,
+    "paymentMode": "UPI",
+    "settledAt": "2026-11-18T06:44:50.088Z",
+    "cashier": "Rahul Nair",
+    "items": [
+      {
+        "id": "it-1794984289573-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1794984289636-0",
+        "itemId": "m-0",
+        "itemName": "Chicken 65",
+        "quantity": 1,
+        "pricePaise": 20000,
+        "lineTotalPaise": 20000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1, Chicken 65 X 1"
+  },
+  {
+    "id": "hist-quick-1794984290332",
+    "invoiceNumber": "20261118-006",
+    "orderCode": "DIR-20261118-006",
+    "tableCode": "T1B",
+    "roomName": "Dining Area",
+    "grandTotalPaise": 8000,
+    "paymentMode": "SPLIT",
+    "settledAt": "2026-11-18T06:44:50.332Z",
+    "cashier": "Anjali Menon",
+    "items": [
+      {
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "invoiceNumber": "VOID-T1B-46",
+    "orderCode": "T1B-46",
+    "tableCode": "T1B",
+    "roomName": "AC Room",
+    "grandTotalPaise": 3000,
+    "paymentMode": "VOID_AT_DAY_CLOSE",
+    "settledAt": "2026-11-18T06:44:54.256Z",
+    "cashier": "System Day Close",
+    "items": [
+      {
+        "id": "it-1794984289836-0",
+        "itemId": "m-0",
+        "itemName": "Dosa",
+        "quantity": 2,
+        "pricePaise": 1500,
+        "lineTotalPaise": 3000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Dosa X 2"
+  },
+  {
+    "id": "hist-1794984303532",
+    "invoiceNumber": "20261118-007",
+    "orderCode": "T1A-50",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T06:45:03.532Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1794984303325-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-quick-1794984318435",
+    "invoiceNumber": "20261118-008",
+    "orderCode": "DIR-20261118-008",
+    "tableCode": "TAKEAWAY",
+    "roomName": "Takeaway Desk",
+    "grandTotalPaise": 4500,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T06:45:18.435Z",
+    "cashier": "Rahul Nair",
+    "items": [
+      {
+        "itemName": "Kerala Parotta",
+        "quantity": 3,
+        "pricePaise": 1500,
+        "lineTotalPaise": 4500
+      }
+    ],
+    "itemsSummary": "Kerala Parotta X 3"
+  },
+  {
+    "id": "hist-1794984417522",
+    "invoiceNumber": "20261118-009",
+    "orderCode": "T99-02",
+    "tableCode": "T99",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T06:46:57.522Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1794984417456-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-quick-1794984418275",
+    "invoiceNumber": "20261118-010",
+    "orderCode": "DIR-20261118-010",
+    "tableCode": "TAKEAWAY",
+    "roomName": "Takeaway Desk",
+    "grandTotalPaise": 4500,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T06:46:58.275Z",
+    "cashier": "Rahul Nair",
+    "items": [
+      {
+        "itemName": "Kerala Parotta",
+        "quantity": 3,
+        "pricePaise": 1500,
+        "lineTotalPaise": 4500
+      }
+    ],
+    "itemsSummary": "Kerala Parotta X 3"
+  },
+  {
+    "id": "hist-1794984418436",
+    "invoiceNumber": "20261118-011",
+    "orderCode": "T2A-45",
+    "tableCode": "T2A",
+    "roomName": "Garden",
+    "grandTotalPaise": 28000,
+    "paymentMode": "UPI",
+    "settledAt": "2026-11-18T06:46:58.436Z",
+    "cashier": "Rahul Nair",
+    "items": [
+      {
+        "id": "it-1794984418005-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1794984418047-0",
+        "itemId": "m-0",
+        "itemName": "Chicken 65",
+        "quantity": 1,
+        "pricePaise": 20000,
+        "lineTotalPaise": 20000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1, Chicken 65 X 1"
+  },
+  {
+    "id": "hist-1794984418599",
+    "invoiceNumber": "20261118-012",
+    "orderCode": "T1A-60",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T06:46:58.599Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1794984417957-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1794984418706",
+    "invoiceNumber": "20261118-013",
+    "orderCode": "T1A-59",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T06:46:58.706Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1794984417931-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1794984418777",
+    "invoiceNumber": "20261118-014",
+    "orderCode": "T1A-58",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T06:46:58.776Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1794984417902-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1794984418859",
+    "invoiceNumber": "20261118-015",
+    "orderCode": "T1A-57",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T06:46:58.859Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1794984417875-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1794984418937",
+    "invoiceNumber": "20261118-016",
+    "orderCode": "T1A-56",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T06:46:58.937Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1794984417831-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1794984419020",
+    "invoiceNumber": "20261118-017",
+    "orderCode": "T1A-55",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T06:46:59.020Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1794984417795-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1794984419096",
+    "invoiceNumber": "20261118-018",
+    "orderCode": "T1A-54",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T06:46:59.096Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1794984417764-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1794984419163",
+    "invoiceNumber": "20261118-019",
+    "orderCode": "T1A-53",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T06:46:59.163Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1794984417733-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1794984419227",
+    "invoiceNumber": "20261118-020",
+    "orderCode": "T1A-52",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T06:46:59.227Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1794984417695-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1794984419282",
+    "invoiceNumber": "20261118-021",
+    "orderCode": "T1A-51",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T06:46:59.282Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1794984417657-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-quick-1794984419345",
+    "invoiceNumber": "20261118-022",
+    "orderCode": "DIR-20261118-022",
+    "tableCode": "T1B",
+    "roomName": "Dining Area",
+    "grandTotalPaise": 8000,
+    "paymentMode": "SPLIT",
+    "settledAt": "2026-11-18T06:46:59.345Z",
+    "cashier": "Anjali Menon",
+    "items": [
+      {
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "invoiceNumber": "VOID-T1B-47",
+    "orderCode": "T1B-47",
+    "tableCode": "T1B",
+    "roomName": "AC Room",
+    "grandTotalPaise": 3000,
+    "paymentMode": "VOID_AT_DAY_CLOSE",
+    "settledAt": "2026-11-18T06:47:03.188Z",
+    "cashier": "System Day Close",
+    "items": [
+      {
+        "id": "it-1794984418192-0",
+        "itemId": "m-0",
+        "itemName": "Dosa",
+        "quantity": 2,
+        "pricePaise": 1500,
+        "lineTotalPaise": 3000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Dosa X 2"
+  },
+  {
+    "id": "hist-1794984432171",
+    "invoiceNumber": "20261118-023",
+    "orderCode": "T1A-61",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T06:47:12.171Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1794984431969-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-quick-1795005110730",
+    "invoiceNumber": "20261118-024",
+    "orderCode": "DIR-20261118-024",
+    "tableCode": "TAKEAWAY",
+    "roomName": "Takeaway Desk",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T12:31:50.730Z",
+    "cashier": "Rahul Nair",
+    "items": [
+      {
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1795005121878",
+    "invoiceNumber": "20261118-025",
+    "orderCode": "T1A-62",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T12:32:01.878Z",
+    "cashier": "Rahul Nair",
+    "items": [
+      {
+        "id": "it-1795005121680-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1795005323629",
+    "invoiceNumber": "20261118-026",
+    "orderCode": "T1B-48",
+    "tableCode": "T1B",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T12:35:23.629Z",
+    "cashier": "Rahul Nair",
+    "items": [
+      {
+        "id": "it-1795005323389-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1795005370767",
+    "invoiceNumber": "20261118-027",
+    "orderCode": "T99-03",
+    "tableCode": "T99",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T12:36:10.767Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1795005370672-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-quick-1795005372212",
+    "invoiceNumber": "20261118-028",
+    "orderCode": "DIR-20261118-028",
+    "tableCode": "TAKEAWAY",
+    "roomName": "Takeaway Desk",
+    "grandTotalPaise": 4500,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T12:36:12.212Z",
+    "cashier": "Rahul Nair",
+    "items": [
+      {
+        "itemName": "Kerala Parotta",
+        "quantity": 3,
+        "pricePaise": 1500,
+        "lineTotalPaise": 4500
+      }
+    ],
+    "itemsSummary": "Kerala Parotta X 3"
+  },
+  {
+    "id": "hist-1795005372369",
+    "invoiceNumber": "20261118-029",
+    "orderCode": "T2A-46",
+    "tableCode": "T2A",
+    "roomName": "Garden",
+    "grandTotalPaise": 28000,
+    "paymentMode": "UPI",
+    "settledAt": "2026-11-18T12:36:12.369Z",
+    "cashier": "Rahul Nair",
+    "items": [
+      {
+        "id": "it-1795005371692-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795005371768-0",
+        "itemId": "m-0",
+        "itemName": "Chicken 65",
+        "quantity": 1,
+        "pricePaise": 20000,
+        "lineTotalPaise": 20000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1, Chicken 65 X 1"
+  },
+  {
+    "id": "hist-1795005372532",
+    "invoiceNumber": "20261118-030",
+    "orderCode": "T1A-72",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T12:36:12.532Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1795005371572-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1795005372675",
+    "invoiceNumber": "20261118-031",
+    "orderCode": "T1A-71",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T12:36:12.675Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1795005371522-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1795005372790",
+    "invoiceNumber": "20261118-032",
+    "orderCode": "T1A-70",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T12:36:12.790Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1795005371479-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1795005372944",
+    "invoiceNumber": "20261118-033",
+    "orderCode": "T1A-69",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T12:36:12.944Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1795005371432-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1795005373096",
+    "invoiceNumber": "20261118-034",
+    "orderCode": "T1A-68",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T12:36:13.096Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1795005371380-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1795005373316",
+    "invoiceNumber": "20261118-035",
+    "orderCode": "T1A-67",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T12:36:13.316Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1795005371317-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1795005373454",
+    "invoiceNumber": "20261118-036",
+    "orderCode": "T1A-66",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T12:36:13.454Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1795005371263-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1795005373604",
+    "invoiceNumber": "20261118-037",
+    "orderCode": "T1A-65",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T12:36:13.604Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1795005371182-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1795005373798",
+    "invoiceNumber": "20261118-038",
+    "orderCode": "T1A-64",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T12:36:13.798Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1795005371051-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1795005373965",
+    "invoiceNumber": "20261118-039",
+    "orderCode": "T1A-63",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T12:36:13.965Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1795005370985-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-quick-1795005375938",
+    "invoiceNumber": "20261118-040",
+    "orderCode": "DIR-20261118-040",
+    "tableCode": "T1B",
+    "roomName": "Dining Area",
+    "grandTotalPaise": 8000,
+    "paymentMode": "SPLIT",
+    "settledAt": "2026-11-18T12:36:15.938Z",
+    "cashier": "Anjali Menon",
+    "items": [
+      {
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "invoiceNumber": "VOID-T1B-49",
+    "orderCode": "T1B-49",
+    "tableCode": "T1B",
+    "roomName": "AC Room",
+    "grandTotalPaise": 3000,
+    "paymentMode": "VOID_AT_DAY_CLOSE",
+    "settledAt": "2026-11-18T12:36:34.203Z",
+    "cashier": "System Day Close",
+    "items": [
+      {
+        "id": "it-1795005372054-0",
+        "itemId": "m-0",
+        "itemName": "Dosa",
+        "quantity": 2,
+        "pricePaise": 1500,
+        "lineTotalPaise": 3000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Dosa X 2"
+  },
+  {
+    "id": "hist-1795005402994",
+    "invoiceNumber": "20261118-041",
+    "orderCode": "T1A-73",
+    "tableCode": "T1A",
+    "roomName": "AC Room",
+    "grandTotalPaise": 8000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T12:36:42.994Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1795005402704-0",
+        "itemId": "m-0",
+        "itemName": "Masala dosa",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Masala dosa X 1"
+  },
+  {
+    "id": "hist-1795005682756",
+    "invoiceNumber": "20261118-042",
+    "orderCode": "T1B-50",
+    "tableCode": "T1B",
+    "roomName": "AC Room",
+    "grandTotalPaise": 38000,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T12:41:22.756Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1795005638782-0",
+        "itemId": "m-1795005599206-826",
+        "itemName": "Meals",
+        "itemMalayalamName": "",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795005638782-1",
+        "itemId": "m-1795005580491-541",
+        "itemName": "Choora fry",
+        "itemMalayalamName": "",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "SEAFOOD_FRY",
+        "notes": ""
+      },
+      {
+        "id": "it-1795005638782-2",
+        "itemId": "m-1794636706100-431",
+        "itemName": "Chicken 65",
+        "itemMalayalamName": "ചിക്കൻ 65",
+        "quantity": 1,
+        "pricePaise": 20000,
+        "lineTotalPaise": 20000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795005638782-3",
+        "itemId": "m-1795005565057-315",
+        "itemName": "Water",
+        "itemMalayalamName": "",
+        "quantity": 1,
+        "pricePaise": 2000,
+        "lineTotalPaise": 2000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Meals X 1, Choora fry X 1, Chicken 65 X 1, Water X 1"
+  },
+  {
+    "id": "hist-1795005822304",
+    "invoiceNumber": "20261118-043",
+    "orderCode": "T2B-33",
+    "tableCode": "T2B",
+    "roomName": "Garden",
+    "grandTotalPaise": 47500,
+    "paymentMode": "CASH",
+    "settledAt": "2026-11-18T12:43:42.304Z",
+    "cashier": "System Administrator",
+    "items": [
+      {
+        "id": "it-1795005792337-0",
+        "itemId": "m-1795005599206-826",
+        "itemName": "Meals",
+        "itemMalayalamName": "",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795005792337-1",
+        "itemId": "m-1795005580491-541",
+        "itemName": "Choora fry",
+        "itemMalayalamName": "",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "SEAFOOD_FRY",
+        "notes": ""
+      },
+      {
+        "id": "it-1795005792337-2",
+        "itemId": "m-1795005565057-315",
+        "itemName": "Water",
+        "itemMalayalamName": "",
+        "quantity": 1,
+        "pricePaise": 2000,
+        "lineTotalPaise": 2000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795005792337-3",
+        "itemId": "m-1794930797982-655",
+        "itemName": "Masala dosa",
+        "itemMalayalamName": "",
+        "quantity": 1,
+        "pricePaise": 8000,
+        "lineTotalPaise": 8000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795005792337-4",
+        "itemId": "m-1794636706100-431",
+        "itemName": "Chicken 65",
+        "itemMalayalamName": "ചിക്കൻ 65",
+        "quantity": 1,
+        "pricePaise": 20000,
+        "lineTotalPaise": 20000,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      },
+      {
+        "id": "it-1795005792337-5",
+        "itemId": "m-1794636754551-541",
+        "itemName": "Dosa",
+        "itemMalayalamName": "ദോശ",
+        "quantity": 1,
+        "pricePaise": 1500,
+        "lineTotalPaise": 1500,
+        "station": "MAIN_KITCHEN",
+        "notes": ""
+      }
+    ],
+    "itemsSummary": "Meals X 1, Choora fry X 1, Water X 1, Masala dosa X 1, Chicken 65 X 1, Dosa X 1"
+  }
+]

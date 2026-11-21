@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf';
+import { BRAND_CALLIGRAPHY_BASE64 } from './brandCalligraphyBase64';
 
 export async function downloadReportAsPdf(reportType: string, isoDate: string, filename: string) {
   try {
@@ -20,49 +21,58 @@ export async function downloadReportAsPdf(reportType: string, isoDate: string, f
     const accentGrey = [100, 116, 139];
     const lightBg = [248, 250, 252];
 
-    // Header Banner
-    doc.setFillColor(12, 14, 18);
-    doc.rect(0, 0, 210, 28, 'F');
+    // Header Banner - Authentic Brand Calligraphy Logo (matching bills & home screen)
+    try {
+      // 384x86 -> aspect ratio ~4.465. At width = 48mm, height = 10.75mm
+      doc.addImage(BRAND_CALLIGRAPHY_BASE64, 'PNG', 14, 8, 48, 10.75);
+    } catch (e) {
+      console.warn('Calligraphy logo rendering fallback:', e);
+    }
 
-    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(9.5);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.text('ITHI POORAM (ഇത്തിപ്പൂരം)', 14, 12);
+    doc.setTextColor(71, 85, 105);
+    doc.text('VANCHIYOOR, TRIVANDRUM', 14, 23);
 
-    doc.setFontSize(9);
+    // Business Date & Report Stamp on top right
+    doc.setFontSize(9.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(`DATE: ${isoDate}`, 196, 14, { align: 'right' });
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(203, 213, 225);
-    doc.text('Kerala Lunch & Seafood Restaurant - Vanchiyoor, Trivandrum', 14, 18);
-    doc.text(`Official Master Database Report | Date: ${isoDate}`, 14, 23);
+    doc.setTextColor(100, 116, 139);
+    doc.text('OFFICIAL BUSINESS REPORT', 196, 20, { align: 'right' });
 
-    let y = 38;
+    // Clean dividing border rule below header
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.5);
+    doc.line(14, 26, 196, 26);
+
+    let y = 35;
 
     // Report Type Heading
     doc.setTextColor(15, 23, 42);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
+    doc.setFontSize(13);
 
     if (reportType === 'sales') {
-      doc.text('1. TOTAL SALES OF THE DAY REPORT', 14, y);
+      doc.text('TOTAL SALES OF THE DAY REPORT', 14, y);
       y += 8;
       const sales = reports.totalSales || {};
 
-      doc.setFontSize(10);
+      doc.setFontSize(9.5);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(71, 85, 105);
-      doc.text(`Audited from Master Database for Business Day: ${isoDate}`, 14, y);
+      doc.text(`Business Day: ${isoDate}`, 14, y);
       y += 10;
 
-      // Summary KPI Grid
+      // Clean KPI Grid (Total Bills, Gross Total, Cash, UPI - Zero Tax)
       const rows = [
         ['Total Bills Settled', `${sales.totalBillsSettled || 0} Orders`],
         ['Gross Total Sales', `INR ${(sales.grossSalesRupees || 0).toFixed(2)}`],
         ['Cash Collections', `INR ${(sales.cashRupees || 0).toFixed(2)}`],
         ['UPI / Online Collections', `INR ${(sales.upiRupees || 0).toFixed(2)}`],
-        ['Card Collections', `INR ${(sales.cardRupees || 0).toFixed(2)}`],
-        ['Average Order Value (AOV)', `INR ${(sales.aovRupees || 0).toFixed(2)}`],
-        ['CGST (2.5%)', `INR ${(sales.cgstRupees || 0).toFixed(2)}`],
-        ['SGST (2.5%)', `INR ${(sales.sgstRupees || 0).toFixed(2)}`],
       ];
 
       rows.forEach(([label, value], idx) => {

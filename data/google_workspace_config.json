@@ -1,0 +1,15 @@
+{
+  "adminEmail": "ithipoorampos@gmail.com",
+  "spreadsheetId": "1sk_qbGAP74h26oYiDkMin815GbKikMJf6cqdK4thT4Y",
+  "spreadsheetUrl": "https://docs.google.com/spreadsheets/d/1sk_qbGAP74h26oYiDkMin815GbKikMJf6cqdK4thT4Y/edit?usp=sharing",
+  "restaurantName": "ITHI POORAM (ഇത്തിപ്പൂരം)",
+  "restaurantLocation": "Vanchiyoor, Trivandrum",
+  "sheets": {
+    "sales": "Sales_Ledger",
+    "menu": "Menu_Stock",
+    "tables": "Tables_Master",
+    "billing": "Billing_Settlement",
+    "staff": "Staff_Registry"
+  },
+  "webhookUrl": "https://script.google.com/macros/s/AKfycbyOWefQz6VFbo9qJe1xrxQJONe8rqCWnhGuBwIfRKJwc3-izravBVOL9NmqUJVKHUiegA/exec"
+}

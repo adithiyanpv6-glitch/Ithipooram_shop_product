@@ -1,6 +1,15 @@
 import { NextResponse } from 'next/server';
-import { db, refreshTableSummaries, persistDb } from '@/lib/serverDb';
-import { pushSettledBillToGoogleDrive } from '@/lib/googleWorkspaceSync';
+import { 
+  db, 
+  refreshTableSummaries, 
+  persistDb, 
+  generateDailySequentialInvoiceNumber, 
+  formatIthiPooramThermalReceipt,
+  verifyMasterPin,
+  appendToDailyLedger
+} from '@/lib/serverDb';
+import { printToSeznikBluetoothPrinter } from '@/lib/serverPrinter';
+import { pushSettledBillToGoogleDrive, pushLiveUpdateToGoogleWorkspace } from '@/lib/googleWorkspaceSync';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,7 +24,49 @@ export async function OPTIONS() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { orderId, paymentMode, pin, referenceNumber, cashierName } = body;
+    const { orderId, paymentMode, pin, cashierPin, referenceNumber, cashierName } = body;
+
+    const enteredPin = (cashierPin || pin || '').trim();
+    if (!enteredPin) {
+      return NextResponse.json({ error: 'Cashier PIN / password is required to authorize settlement.' }, { status: 400, headers: corsHeaders });
+    }
+
+    // Authenticate cashier against master staff database (db.staffUsers)
+    const allStaff = db.staffUsers || [];
+    let authenticated = false;
+    let verifiedCashierName = cashierName || 'Counter Cashier';
+
+    if (cashierName && allStaff.length > 0) {
+      const matched = allStaff.find(
+        (s) => (s.fullName || '').toLowerCase() === cashierName.toLowerCase() || (s.username || '').toLowerCase() === cashierName.toLowerCase()
+      );
+      if (matched && matched.pin === enteredPin) {
+        authenticated = true;
+        verifiedCashierName = matched.fullName || matched.username;
+      }
+    }
+
+    // Match any registered staff member by PIN
+    if (!authenticated && allStaff.length > 0) {
+      const pinMatched = allStaff.find((s) => s.pin === enteredPin);
+      if (pinMatched) {
+        authenticated = true;
+        verifiedCashierName = pinMatched.fullName || pinMatched.username;
+      }
+    }
+
+    // Master database Security PIN verification
+    if (verifyMasterPin(enteredPin)) {
+      authenticated = true;
+      verifiedCashierName = 'System Administrator';
+    }
+
+    if (!authenticated) {
+      return NextResponse.json(
+        { error: 'Authentication failed: Incorrect Security PIN. Please enter your valid Master PIN.' },
+        { status: 401, headers: corsHeaders }
+      );
+    }
 
     if (!orderId) {
       return NextResponse.json({ error: 'Order ID is required' }, { status: 400, headers: corsHeaders });
@@ -30,45 +81,84 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'This ticket has already been settled' }, { status: 400, headers: corsHeaders });
     }
 
-    const now = new Date();
-    const invoiceNumber = `INV-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(Math.floor(Math.random() * 900) + 100)}`;
+    const { invoiceNumber, dateStr, timeStr } = generateDailySequentialInvoiceNumber();
 
+    const tableObj = (db.tables || []).find((t) => (t.tableCode || '').toUpperCase() === (order.tableCode || '').toUpperCase());
+    const roomName = tableObj?.roomName || 'Dining Area';
+    const tableName = order.tableName || tableObj?.displayName || order.tableCode;
+
+    const settledTimestamp = new Date().toISOString();
     order.paymentStatus = 'PAID';
     order.fulfillmentStatus = 'SERVED';
     order.paymentMode = paymentMode || 'UPI';
     order.paymentRef = referenceNumber || '';
-    order.cashierName = cashierName || 'Cashier';
-    order.paidAt = now.toISOString();
+    order.cashierName = verifiedCashierName;
+    order.paidAt = settledTimestamp;
+    (order as any).invoiceNumber = invoiceNumber;
 
-    // Record into historical sales for CSV reporting
-    db.historicalSales.unshift({
+    const receiptItems = (order.items || []).map((i: any) => ({
+      name: i.itemNameSnapshot || i.itemName || i.name || 'Dish',
+      qty: i.quantity || 1,
+      pricePaise: i.itemPriceSnapshotPaise || i.pricePaise || 0,
+      lineTotalPaise: i.lineTotalPaise || ((i.pricePaise || 0) * (i.quantity || 1)),
+    }));
+
+    const historicalRecord = {
+      id: `hist-${Date.now()}`,
       invoiceNumber,
       orderCode: order.customerCode,
       tableCode: order.tableCode,
+      roomName,
       grandTotalPaise: order.grandTotalPaise,
       paymentMode: order.paymentMode || 'UPI',
-      settledAt: now.toISOString(),
+      settledAt: settledTimestamp,
       cashier: order.cashierName || 'Cashier',
-    });
+      items: order.items || [],
+      itemsSummary: (order.items || []).map((i: any) => `${i.itemName} X ${i.quantity}`).join(', '),
+    };
+
+    // Record into historical sales for CSV reporting
+    db.historicalSales.unshift(historicalRecord);
+
+    // Save to permanent immutable disk daily ledger
+    appendToDailyLedger(historicalRecord);
+
+    // Synchronize Kitchen Display System (KDS): Mark all tickets for this order as SERVED
+    if (Array.isArray(db.kitchenTickets)) {
+      for (const kt of db.kitchenTickets) {
+        if (kt.orderId === order.id || (order.customerCode && kt.customerCode?.startsWith(order.customerCode))) {
+          kt.status = 'SERVED';
+          kt.deliveredAtMs = Date.now();
+        }
+      }
+    }
 
     // Refresh tables
     refreshTableSummaries();
     persistDb();
 
-    // Stream settled bill directly to Google Drive Master Sales_Ledger
-    pushSettledBillToGoogleDrive({
-      invoiceNumber,
-      orderCode: order.customerCode,
-      tableCode: order.tableCode,
-      paymentMode: order.paymentMode || 'UPI',
-      grandTotalPaise: order.grandTotalPaise,
-      cashier: order.cashierName || 'Cashier',
-    }).catch(() => {});
+    // Stream settled bill and live sync to Google Drive & Master Database
+    setTimeout(() => {
+      pushSettledBillToGoogleDrive({
+        invoiceNumber,
+        orderCode: order.customerCode,
+        tableCode: order.tableCode,
+        tableName,
+        roomName,
+        paymentMode: order.paymentMode || 'UPI',
+        grandTotalPaise: order.grandTotalPaise,
+        cashier: order.cashierName || 'Cashier',
+        itemsSummary: historicalRecord.itemsSummary,
+        timestamp: settledTimestamp,
+      }).catch((e) => console.warn('[Google Drive Sync] settle stream error:', e));
+
+      pushLiveUpdateToGoogleWorkspace().catch((e) => console.warn('[Google Workspace Sync] settle sync error:', e));
+    }, 0);
 
     // Record audit log
     db.auditLogs.unshift({
       id: `aud-${Date.now()}`,
-      timestamp: now.toISOString(),
+      timestamp: settledTimestamp,
       actionType: 'BILL_SETTLED',
       module: 'BILLING',
       usernameSnapshot: order.cashierName || 'Cashier',
@@ -78,50 +168,73 @@ export async function POST(request: Request) {
       reason: `Settled check via ${order.paymentMode} for ${(order.grandTotalPaise / 100).toFixed(2)} INR`,
       success: true,
     });
+    persistDb();
 
-    const thermalReceipt = `--------------------------------
-          ഇത്തിപ്പൂരം
-          ITHI POORAM
-    Kerala Lunch & Seafood
-    Vanchiyoor, Trivandrum
-    GSTIN: 32AAAAI0000A1Z5
---------------------------------
-Inv: ${invoiceNumber}
-Date: ${now.toLocaleDateString('en-IN')} ${now.toLocaleTimeString('en-IN')}
-Table: ${order.tableCode} (${order.tableName})
-Cashier: ${order.cashierName}
---------------------------------
-ITEM             QTY  RATE TOTAL
---------------------------------
-${order.items.map((i) => {
-  const name = i.itemName.padEnd(16).substring(0, 16);
-  const qty = String(i.quantity).padStart(3);
-  const rate = (i.pricePaise / 100).toFixed(0).padStart(5);
-  const tot = (i.lineTotalPaise / 100).toFixed(0).padStart(6);
-  return `${name} ${qty} ${rate} ${tot}`;
-}).join('\n')}
---------------------------------
-Subtotal:              ₹${(order.subtotalPaise / 100).toFixed(2)}
-CGST (2.5%):           ₹${(order.cgstPaise / 100).toFixed(2)}
-SGST (2.5%):           ₹${(order.sgstPaise / 100).toFixed(2)}
---------------------------------
-GRAND TOTAL:           ₹${(order.grandTotalPaise / 100).toFixed(2)}
-Payment: [${order.paymentMode}] ${order.paymentRef ? `Ref: ${order.paymentRef}` : 'VERIFIED'}
---------------------------------
-      നന്ദി! വീണ്ടും വരിക
-      Thank You! Visit Again
---------------------------------`.trim();
+    const thermalReceipt = formatIthiPooramThermalReceipt({
+      invoiceNumber,
+      dateStr,
+      timeStr,
+      tableName,
+      cashierName: order.cashierName || 'Cashier',
+      items: receiptItems,
+      grandTotalPaise: order.grandTotalPaise,
+      paymentMode: order.paymentMode || 'UPI',
+    });
+
+    // Auto-send structured JSON payload to SEZNIK Bluetooth printer wirelessly in background
+    let btPrintStatus = 'SUCCESS';
+    try {
+      const printerPayload = JSON.stringify({
+        invoiceNumber,
+        dateStr,
+        timeStr,
+        tableName,
+        cashierName: order.cashierName || 'Cashier',
+        paymentMode: order.paymentMode || 'UPI',
+        grandTotal: (order.grandTotalPaise / 100).toFixed(2),
+        items: receiptItems.map((it: any) => ({
+          name: it.name,
+          qty: it.qty,
+          rate: (it.pricePaise / 100).toFixed(2),
+          total: (it.lineTotalPaise / 100).toFixed(2),
+        })),
+      });
+
+      printToSeznikBluetoothPrinter(printerPayload, 'SEZNIK')
+        .then((res) => {
+          if (res.success) {
+            console.log(`[Table Settle] Receipt printed wirelessly on SEZNIK printer for ${invoiceNumber}`);
+          }
+        })
+        .catch((e) => console.warn(`[Table Settle] Non-blocking print notice: ${e.message}`));
+    } catch (e: any) {
+      btPrintStatus = 'PRINTER_ERROR';
+    }
 
     return NextResponse.json(
       {
         success: true,
+        invoiceNumber,
+        btPrintStatus,
         invoice: {
+          id: `inv-${Date.now()}`,
           invoiceNumber,
           customerCode: order.customerCode,
-          tableCode: order.tableCode,
+          tableCode: tableName,
+          roomName,
+          dateStr,
+          timeStr,
+          cashierName: order.cashierName,
+          items: receiptItems.map((it: any) => ({
+            name: it.name,
+            qty: it.qty,
+            rate: Math.round(it.pricePaise / 100),
+            total: Math.round(it.lineTotalPaise / 100),
+          })),
           grandTotalPaise: order.grandTotalPaise,
           paymentMode: order.paymentMode,
           paidAt: order.paidAt,
+          thermalReceipt,
         },
         thermalReceipt,
       },

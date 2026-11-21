@@ -21,6 +21,7 @@ export interface KitchenTicket {
   customerCode: string;
   tableCode: string;
   tableName: string;
+  roomName?: string;
   station: 'MAIN_KITCHEN' | 'SEAFOOD_FRY' | 'BEVERAGE_COUNTER' | string;
   stationLabel: string;
   status: 'NEW' | 'ACCEPTED' | 'PREPARING' | 'READY' | 'SERVED';
@@ -33,7 +34,6 @@ export interface KitchenTicket {
 
 export default function KitchenDisplayPage() {
   const [tickets, setTickets] = useState<KitchenTicket[]>([]);
-  const [stationFilter, setStationFilter] = useState<string>('ALL');
   const [speakerEnabled, setSpeakerEnabled] = useState(true);
   const [now, setNow] = useState(Date.now());
   const [isLiveConnected, setIsLiveConnected] = useState(true);
@@ -42,15 +42,20 @@ export default function KitchenDisplayPage() {
   // Tab navigation: exactly 3 options as requested: 'new' (New Orders to Receive) | 'working' (Working Orders) | 'served' (Served Ones)
   const [activeTab, setActiveTab] = useState<'new' | 'working' | 'served'>('new');
 
-  // Load persisted tickets on mount from local browser memory to prevent cold-start blanking
+  // Load persisted tickets on mount from local browser memory for today only
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('ithipooram_kds_tickets');
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
+          const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setTickets(parsed);
+            const todayTickets = parsed.filter((t: any) => {
+              const ticketDate = new Date(t.createdAtMs || Date.now()).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+              return ticketDate === todayStr;
+            });
+            setTickets(todayTickets);
           }
         } catch (e) {}
       }
@@ -84,12 +89,12 @@ export default function KitchenDisplayPage() {
   };
 
   // Automatic Text-To-Speech Voice Callout
-  const speakNewOrder = (tableCode?: string) => {
+  const speakNewOrder = (ticket?: KitchenTicket) => {
     if (!speakerEnabled || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     try {
       window.speechSynthesis.cancel();
-      const text = tableCode 
-        ? `New order received for Table ${tableCode}`
+      const text = ticket 
+        ? `New order received for Table ${ticket.tableCode} in ${ticket.roomName || 'Dining Area'}`
         : 'New order received in kitchen';
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 0.95;
@@ -101,42 +106,35 @@ export default function KitchenDisplayPage() {
     }
   };
 
-  // Poll Central API for live incoming orders every 2.5s with Resilient Merging (Zero Disappearing)
+  // Authoritative Central API sync for live incoming orders every 2.5s
   const fetchTickets = async () => {
     try {
-      const endpoint = `/api/kitchen${stationFilter !== 'ALL' ? `?station=${stationFilter}` : ''}`;
+      const endpoint = '/api/kitchen';
       const res = await fetch(endpoint, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         const serverTickets: KitchenTicket[] = data.tickets || [];
         
-        // Intelligent Merge: Never wipe out an active ticket when hitting an ephemeral cold lambda
-        setTickets((prev) => {
-          if (serverTickets.length === 0 && prev.length > 0) {
-            return prev; // Retain existing active tickets!
-          }
-
-          const ticketMap = new Map<string, KitchenTicket>();
-          // Retain active tickets that haven't been explicitly cleared
-          prev.forEach((t) => ticketMap.set(t.id, t));
-          // Apply fresh server state
-          serverTickets.forEach((t) => ticketMap.set(t.id, t));
-
-          const merged = Array.from(ticketMap.values());
+        setTickets(() => {
+          const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+          const fresh = serverTickets.filter((t) => {
+            const ticketDate = new Date(t.createdAtMs || Date.now()).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+            return ticketDate === todayStr;
+          });
           if (typeof window !== 'undefined') {
-            localStorage.setItem('ithipooram_kds_tickets', JSON.stringify(merged));
+            localStorage.setItem('ithipooram_kds_tickets', JSON.stringify(fresh));
           }
 
-          const currentNewCount = merged.filter((t) => t.status === 'NEW').length;
+          const currentNewCount = fresh.filter((t) => t.status === 'NEW').length;
           // If brand new order arrived: play chime + call out over speaker automatically!
           if (lastTicketCount !== null && currentNewCount > lastTicketCount) {
             playChime();
-            const latestNew = merged.find((t) => t.status === 'NEW');
-            speakNewOrder(latestNew?.tableCode);
+            const latestNew = fresh.find((t) => t.status === 'NEW');
+            speakNewOrder(latestNew);
           }
           setLastTicketCount(currentNewCount);
 
-          return merged;
+          return fresh;
         });
 
         setIsLiveConnected(true);
@@ -148,11 +146,39 @@ export default function KitchenDisplayPage() {
     }
   };
 
+  const handleClearServed = async () => {
+    try {
+      await fetch('/api/kitchen?action=CLEAR_SERVED', { method: 'DELETE' });
+      setTickets((prev) => {
+        const next = prev.filter((t) => t.status !== 'SERVED');
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('ithipooram_kds_tickets', JSON.stringify(next));
+        }
+        return next;
+      });
+    } catch (err) {
+      console.error('Failed to clear served tickets:', err);
+    }
+  };
+
+  const handleResetKds = async () => {
+    if (!window.confirm('Are you sure you want to clear all kitchen tickets?')) return;
+    try {
+      await fetch('/api/kitchen?action=CLEAR_ALL', { method: 'DELETE' });
+      setTickets([]);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('ithipooram_kds_tickets');
+      }
+    } catch (err) {
+      console.error('Failed to reset KDS:', err);
+    }
+  };
+
   useEffect(() => {
     fetchTickets();
     const interval = setInterval(fetchTickets, 2500);
     return () => clearInterval(interval);
-  }, [stationFilter, speakerEnabled, lastTicketCount]);
+  }, [speakerEnabled, lastTicketCount]);
 
   // Handle Receive / Pick Order (moves to ACCEPTED / PREPARING immediately with zero lag)
   const handleReceiveOrder = async (ticketId: string) => {
@@ -302,18 +328,8 @@ export default function KitchenDisplayPage() {
               </button>
             </div>
 
-            {/* Mobile-Optimized Controls: Station Filter + Auto-Speaker + Refresh */}
+            {/* Mobile-Optimized Controls: Auto-Speaker + Refresh */}
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <select
-                value={stationFilter}
-                onChange={(e) => setStationFilter(e.target.value)}
-                className="flex-1 sm:flex-initial text-xs font-bold bg-zinc-100 border border-zinc-200 rounded-xl px-2.5 py-2 sm:py-1.5 text-black outline-none focus:border-black min-w-0"
-              >
-                <option value="ALL">All Stations</option>
-                <option value="MAIN_KITCHEN">Meals &amp; Curry</option>
-                <option value="SEAFOOD_FRY">Tawa &amp; Fry</option>
-                <option value="BEVERAGE_COUNTER">Beverages</option>
-              </select>
 
               <button
                 onClick={() => {
@@ -330,6 +346,14 @@ export default function KitchenDisplayPage() {
               >
                 {speakerEnabled ? <Volume2 className="w-3.5 h-3.5 text-emerald-600 animate-pulse" /> : <VolumeX className="w-3.5 h-3.5" />}
                 <span className="truncate">{speakerEnabled ? 'Speaker: On' : 'Speaker: Off'}</span>
+              </button>
+
+              <button
+                onClick={handleClearServed}
+                className="px-2.5 py-2 sm:py-1.5 rounded-xl border border-zinc-200 hover:border-zinc-400 text-zinc-600 hover:text-black text-xs font-bold transition cursor-pointer shrink-0"
+                title="Clear served tickets from display"
+              >
+                Clear Served
               </button>
 
               <button
@@ -371,25 +395,24 @@ export default function KitchenDisplayPage() {
                   >
                     <div className="space-y-3">
                       {/* Ticket Header */}
-                      <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
-                        <div className="flex items-center space-x-2">
-                          <span className="px-3 py-1 rounded-xl bg-black text-white font-mono font-black text-sm">
-                            {t.tableCode}
-                          </span>
-                          <span className="text-xs font-mono font-bold text-zinc-500">
-                            {t.customerCode}
-                          </span>
+                      <div className="flex items-start justify-between border-b border-zinc-100 pb-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                            <span className="px-3 py-1 rounded-xl bg-black text-white font-mono font-black text-sm">
+                              {t.tableName || t.tableCode}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xs font-mono font-bold text-zinc-500">
+                              {t.customerCode}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center space-x-1 font-mono text-xs font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
+                        <div className="flex items-center space-x-1 font-mono text-xs font-black text-amber-600 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200 shrink-0">
                           <Clock className="w-3.5 h-3.5" />
                           <span>{formatElapsed(t.createdAtMs)}</span>
                         </div>
                       </div>
-
-                      {/* Station Label */}
-                      <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500 block">
-                        {t.stationLabel}
-                      </span>
 
                       {/* Dish Items */}
                       <div className="space-y-2">
@@ -449,16 +472,20 @@ export default function KitchenDisplayPage() {
                   >
                     <div className="space-y-3">
                       {/* Header */}
-                      <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
-                        <div className="flex items-center space-x-2">
-                          <span className="px-3 py-1 rounded-xl bg-orange-600 text-white font-mono font-black text-sm">
-                            {t.tableCode}
-                          </span>
-                          <span className="text-xs font-mono font-bold text-zinc-500">
-                            {t.customerCode}
-                          </span>
+                      <div className="flex items-start justify-between border-b border-zinc-100 pb-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                            <span className="px-3 py-1 rounded-xl bg-orange-600 text-white font-mono font-black text-sm">
+                              {t.tableName || t.tableCode}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xs font-mono font-bold text-zinc-500">
+                              {t.customerCode}
+                            </span>
+                          </div>
                         </div>
-                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-orange-100 text-orange-800">
+                        <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 shrink-0">
                           Cooking
                         </span>
                       </div>
@@ -502,9 +529,11 @@ export default function KitchenDisplayPage() {
                 {servedOrders.map((t) => (
                   <div key={t.id} className="py-3 flex items-center justify-between text-xs">
                     <div className="flex items-center space-x-3">
-                      <span className="px-2.5 py-1 rounded-xl bg-zinc-100 font-mono font-black text-black">
-                        {t.tableCode}
-                      </span>
+                      <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                        <span className="px-2.5 py-1 rounded-xl bg-zinc-100 font-mono font-black text-black">
+                          {t.tableName || t.tableCode}
+                        </span>
+                      </div>
                       <div>
                         <span className="font-bold text-black">{t.customerCode}</span>
                         <p className="text-[11px] text-zinc-400">

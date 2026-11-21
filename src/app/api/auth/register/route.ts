@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, StaffUserRecord, StaffLoginSession, StaffActivityLog, generateStaffId, persistDb } from '@/lib/serverDb';
-import { syncStaffDatabasePinned, syncStaffSessionDatabasePinned } from '@/lib/telegramPinnedVault';
 import { pushLiveUpdateToGoogleWorkspace } from '@/lib/googleWorkspaceSync';
 
 export async function POST(req: NextRequest) {
@@ -100,10 +99,6 @@ export async function POST(req: NextRequest) {
 
     // Persist registered staff to server disk database
     persistDb();
-
-    // Update pinned Staff Database and Session Database in-place on Telegram
-    syncStaffDatabasePinned().catch(() => {});
-    syncStaffSessionDatabasePinned().catch(() => {});
 
     // Live update to Google Workspace (adithiyanpv6@gmail.com)
     pushLiveUpdateToGoogleWorkspace().catch(() => {});

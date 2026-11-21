@@ -298,7 +298,7 @@ export function generateMultiSheetTableExcelXml(
     <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${t.orderCount}</Data></Cell>
     <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${t.itemsCount}</Data></Cell>
     <Cell ss:StyleID="DataCellCurrency"><Data ss:Type="Number">${(t.revenuePaise / 100).toFixed(2)}</Data></Cell>
-    <Cell ss:StyleID="DataCellLeft"><Data ss:Type="String">${escapeXml(t.url || `https://customer-mobile-ithipooram.vercel.app?table=${t.tableCode}`)}</Data></Cell>
+    <Cell ss:StyleID="DataCellLeft"><Data ss:Type="String">${escapeXml(t.url || `/t/${t.tableCode}`)}</Data></Cell>
    </Row>`;
   });
 

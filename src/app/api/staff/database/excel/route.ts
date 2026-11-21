@@ -21,13 +21,12 @@ export async function GET(req: NextRequest) {
       xml = generateStaffDatabaseXml(db.staffUsers || []);
       filename = `IthiPooram_Staff_Database.xls`;
     } else {
-      // Default: Complete Master Database with all 3 sheets
+      // Default: Complete Master Database with all 5 sheets
       xml = generateUnifiedMasterDatabaseXml(
-        db.staffUsers || [],
-        db.loginSessions || [],
-        db.staffActivityLogs || [],
+        'today',
+        db.historicalSales || [],
         db.tables || [],
-        db.orders || []
+        db.staffUsers || []
       );
       filename = `IthiPooram_Master_Database.xls`;
     }

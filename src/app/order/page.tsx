@@ -38,6 +38,7 @@ export interface MenuItem {
   isAvailable: boolean;
   currentStock?: number | null;
   station?: string;
+  image?: string;
   category: string;
 }
 
@@ -95,6 +96,51 @@ function CustomerOrderingContent() {
   // View state: 'welcome' (first scan / landing) | 'menu' (browsing dishes) | 'status' (order tracker)
   const [currentView, setCurrentView] = useState<'welcome' | 'menu' | 'status'>('welcome');
 
+  const changeView = (view: 'welcome' | 'menu' | 'status') => {
+    setCurrentView(view);
+    if (typeof window !== 'undefined') {
+      const targetHash = view === 'welcome' ? '' : `#${view}`;
+      if (window.location.hash !== targetHash) {
+        window.history.pushState(
+          { ...(window.history.state || {}), view },
+          '',
+          targetHash || (window.location.pathname + window.location.search)
+        );
+      }
+    }
+  };
+
+  const handleOrderBack = () => {
+    if (typeof window !== 'undefined' && window.location.hash) {
+      window.history.back();
+    } else {
+      changeView('welcome');
+    }
+  };
+
+  // Safe Android/iOS hardware back button handling
+  useEffect(() => {
+    const handlePopState = () => {
+      const hash = typeof window !== 'undefined' ? window.location.hash : '';
+      if (hash === '#menu') {
+        setCurrentView('menu');
+      } else if (hash === '#status') {
+        setCurrentView('status');
+      } else {
+        setCurrentView('welcome');
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      const h = window.location.hash;
+      if (h === '#menu') setCurrentView('menu');
+      else if (h === '#status') setCurrentView('status');
+    }
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   // Device session identifier (Phone 1, Phone 2, etc.)
   const [deviceSessionId, setDeviceSessionId] = useState<string>('');
   const [phoneLabel, setPhoneLabel] = useState<string>('Phone 1');
@@ -136,10 +182,10 @@ function CustomerOrderingContent() {
     let label = localStorage.getItem('ithipooram_phone_label') || 'Phone 1';
 
     if (!currentSession) {
-      currentSession = `dev_phone1_${Math.random().toString(36).substring(2, 8)}`;
+      currentSession = `dev_phone_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
       localStorage.setItem('ithipooram_device_session_id', currentSession);
-      localStorage.setItem('ithipooram_phone_label', 'Phone 1');
-      label = 'Phone 1';
+      localStorage.setItem('ithipooram_phone_label', 'Mobile Guest');
+      label = 'Mobile Guest';
     }
 
     setDeviceSessionId(currentSession);
@@ -175,58 +221,60 @@ function CustomerOrderingContent() {
       }
     }
 
-    // Query Central Server (relative or via configured apiUrl)
+    // Query Central Server for active UNPAID orders for this table
     try {
       const base = apiUrl ? apiUrl.replace(/\/$/, '') : '';
-      const res = await fetch(`${base}/api/orders?tableCode=${encodeURIComponent(tCode)}`, { cache: 'no-store' });
+      const res = await fetch(`${base}/api/orders?tableCode=${encodeURIComponent(tCode)}&unpaidOnly=true`, { cache: 'no-store' });
       if (res.ok) {
-        const orders = await res.json();
-        if (Array.isArray(orders) && orders.length > 0) {
-          // Look for matching order for this session or table
-          const matching = orders.find((o: any) => o.deviceSessionId === sessionId || (activeLocal && o.id === activeLocal.id)) || orders[0];
-          if (matching) {
+        const unpaidOrders = await res.json();
+        if (Array.isArray(unpaidOrders)) {
+          // Find order matching this specific phone session or local active order that is still unpaid
+          const matching = unpaidOrders.find((o: any) => o.deviceSessionId === sessionId || (activeLocal && o.id === activeLocal.id));
+          if (matching && matching.paymentStatus === 'UNPAID') {
             setActiveExistingOrder(matching);
             if (typeof window !== 'undefined') {
               localStorage.setItem(storageKey, JSON.stringify(matching));
             }
             return;
+          } else {
+            // No active unpaid order for this phone session / table!
+            // Clean up old local storage so customer has a fresh new ordering page
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem(storageKey);
+            }
+            setActiveExistingOrder(null);
+            return;
           }
         }
       }
 
-      // If server returned empty (e.g. cold lambda instance), DO NOT destroy local active order!
+      // If server unreachable or error, check if local order is unpaid
       if (activeLocal && activeLocal.paymentStatus === 'UNPAID') {
         setActiveExistingOrder(activeLocal);
-        // Resiliently re-seed server if cold instance lost state
-        const base = apiUrl ? apiUrl.replace(/\/$/, '') : '';
-        fetch(`${base}/api/orders`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tableCode: activeLocal.tableCode,
-            deviceSessionId: sessionId,
-            items: activeLocal.items.map((i: any) => ({
-              id: i.itemId || i.id,
-              name: i.itemName,
-              malayalamName: i.itemMalayalamName,
-              pricePaise: i.pricePaise,
-              qty: i.quantity,
-              notes: i.notes || '',
-            })),
-          }),
-        }).catch(() => {});
-      } else if (activeLocal && activeLocal.paymentStatus === 'PAID') {
-        setActiveExistingOrder(activeLocal);
+      } else {
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem(storageKey);
+        }
+        setActiveExistingOrder(null);
       }
     } catch (err) {
-      if (activeLocal) {
+      if (activeLocal && activeLocal.paymentStatus === 'UNPAID') {
         setActiveExistingOrder(activeLocal);
+      } else {
+        setActiveExistingOrder(null);
       }
     }
   };
 
   // 3. Fetch Live Menu uploaded/managed by Admin (Real-time live sync)
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedMenu = localStorage.getItem('ithipooram_menu_categories');
+      if (savedMenu && (savedMenu.includes('Chicken 65') || savedMenu.includes('Kerala Specials') || savedMenu.includes('Idli'))) {
+        localStorage.removeItem('ithipooram_menu_categories');
+        localStorage.removeItem('ithipooram_custom_menu_dishes');
+      }
+    }
     const fetchLiveMenu = async () => {
       try {
         const endpoint = apiUrl ? `${apiUrl}/api/menu` : '/api/menu';
@@ -253,62 +301,21 @@ function CustomerOrderingContent() {
               }))
             })).filter(cat => cat.items.length > 0);
 
-            if (validCategories.length > 0) {
-              setMenuCategories(validCategories);
-              if (typeof window !== 'undefined') {
-                localStorage.setItem('ithipooram_menu_categories', JSON.stringify(validCategories));
-              }
-              return;
+            setMenuCategories(validCategories);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('ithipooram_menu_categories', JSON.stringify(validCategories));
             }
+            return;
+          } else {
+            setMenuCategories([]);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('ithipooram_menu_categories', JSON.stringify([]));
+            }
+            return;
           }
         }
       } catch (e) {
         // Network fallback
-      }
-
-      // Local storage fallback for instant sync across tabs in same browser
-      if (typeof window !== 'undefined') {
-        const catSaved = localStorage.getItem('ithipooram_menu_categories');
-        if (catSaved) {
-          try {
-            const parsed = JSON.parse(catSaved);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setMenuCategories(parsed);
-              return;
-            }
-          } catch (e) {}
-        }
-        const saved = localStorage.getItem('ithipooram_custom_menu_dishes');
-        if (saved) {
-          try {
-            const list = JSON.parse(saved);
-            if (Array.isArray(list) && list.length > 0) {
-              const grouped: Record<string, MenuItem[]> = {};
-              for (const it of list) {
-                const catName = it.category || 'Dishes';
-                if (!grouped[catName]) grouped[catName] = [];
-                grouped[catName].push({
-                  id: it.id || `m-${Math.random()}`,
-                  name: it.name,
-                  malayalamName: it.malayalamName,
-                  description: '',
-                  pricePaise: Math.round(Number(it.priceInr || 0) * 100),
-                  dietary: it.dietary || 'SEAFOOD',
-                  isAvailable: it.isAvailable !== false,
-                  currentStock: it.currentStock,
-                  station: it.station || 'Main Kitchen',
-                  category: catName,
-                });
-              }
-              const cats: MenuCategory[] = Object.entries(grouped).map(([name, items]) => ({
-                id: `cat-${name}`,
-                name,
-                items,
-              }));
-              setMenuCategories(cats);
-            }
-          } catch (err) {}
-        }
       }
     };
 
@@ -433,19 +440,19 @@ function CustomerOrderingContent() {
 
         setCart([]);
         setIsCartOpen(false);
-        setCurrentView('status');
+        changeView('status');
         setOrderNotification(
           isReOrderContinuation 
             ? `Dishes added to your active Table ${tableCode} order! Kitchen has started preparing round ${updatedOrder.roundCount || 2}.`
             : `Order successfully placed for Table ${tableCode}!`
         );
       } else {
-        // Fallback simulation for local/preview
-        simulateLocalOrderSubmission(payload, isReOrderContinuation);
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.error || 'Failed to place order with kitchen. Please call staff or try again.');
       }
     } catch (err) {
-      console.warn('Network error placing order, using local ticket simulation:', err);
-      simulateLocalOrderSubmission(payload, isReOrderContinuation);
+      console.warn('Network error placing order:', err);
+      alert('Network error communicating with kitchen. Please check connection and try again.');
     } finally {
       setIsOrdering(false);
     }
@@ -557,7 +564,7 @@ function CustomerOrderingContent() {
         <div className="max-w-xl mx-auto px-4 py-3 flex items-center justify-between relative">
           {currentView !== 'welcome' ? (
             <button 
-              onClick={() => setCurrentView('welcome')}
+              onClick={handleOrderBack}
               className="flex items-center space-x-1 text-xs font-bold text-stone-600 hover:text-stone-950 p-1.5 rounded-xl hover:bg-stone-100 transition z-10"
               title="Back to Welcome"
             >
@@ -568,22 +575,21 @@ function CustomerOrderingContent() {
             <div className="w-8" />
           )}
 
-          {/* Centered Brand Name & Logo */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <button
-              onClick={() => setCurrentView('welcome')}
-              className="flex items-center space-x-2.5 pointer-events-auto active:opacity-80 transition"
-            >
-              <img 
-                src="/logo.png" 
-                alt="Ithi Pooram Logo" 
-                className="w-9 h-9 object-contain rounded-full shadow-xs shrink-0 bg-stone-50 border border-stone-100"
-              />
-              <span className="font-extrabold text-stone-950 text-base tracking-tight font-brand-title">
-                ITHI POORAM
-              </span>
-            </button>
-          </div>
+          {/* Centered Brand Name Calligraphy when browsing menu or status */}
+          {currentView !== 'welcome' && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <button
+                onClick={() => setCurrentView('welcome')}
+                className="flex items-center justify-center pointer-events-auto active:opacity-80 transition"
+              >
+                <img 
+                  src="/brand-calligraphy-cropped.png" 
+                  alt="ഇത്തിപ്പൂരം" 
+                  className="h-9 sm:h-10 object-contain mx-auto"
+                />
+              </button>
+            </div>
+          )}
 
           <div className="flex items-center space-x-1.5 z-10">
             {activeExistingOrder && currentView === 'menu' ? (
@@ -634,18 +640,14 @@ function CustomerOrderingContent() {
               {/* Calligraphy Logo using uploaded authentic brand calligraphy */}
               <div className="my-2 py-1 px-4">
                 <img 
-                  src="/brand-calligraphy-dark.png" 
-                  alt="ഇത്തിപ്പൂരം - Ithi Pooram" 
+                  src="/brand-calligraphy-cropped.png" 
+                  alt="ഇത്തിപ്പൂരം" 
                   className="h-20 sm:h-24 object-contain mx-auto mix-blend-multiply transition-transform hover:scale-105"
                 />
               </div>
 
-              {/* English Brand typography */}
-              <h1 className="text-xl sm:text-2xl font-black text-stone-950 tracking-wider font-brand-title mt-2">
-                ITHI POORAM
-              </h1>
-              <p className="text-xs sm:text-sm font-semibold text-[#9E341D] tracking-wide mt-1">
-                Authentic Kerala Lunch & Fresh Coastal Seafood
+              <p className="text-xs sm:text-sm font-semibold text-[#9E341D] tracking-wide mt-2">
+                Authentic Kerala Lunch &amp; Fresh Coastal Seafood
               </p>
               <p className="text-xs font-medium text-stone-500 mt-1 tracking-wide">
                 Vanchiyoor, Trivandrum
@@ -700,14 +702,14 @@ function CustomerOrderingContent() {
 
                   <div className="mt-4 flex flex-col sm:flex-row gap-2">
                     <button
-                      onClick={() => setCurrentView('menu')}
+                      onClick={() => changeView('menu')}
                       className="flex-1 py-3 px-4 rounded-xl bg-[#9E341D] hover:bg-[#832B18] text-white font-extrabold text-xs shadow-md flex items-center justify-center space-x-2 transition active:scale-98"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Add More Items to This Order</span>
                     </button>
                     <button
-                      onClick={() => setCurrentView('status')}
+                      onClick={() => changeView('status')}
                       className="py-3 px-4 rounded-xl bg-white border border-amber-300 text-stone-800 font-bold text-xs hover:bg-amber-50 flex items-center justify-center space-x-1"
                     >
                       <span>View Kitchen Status</span>
@@ -727,7 +729,7 @@ function CustomerOrderingContent() {
                 /* NEW CUSTOMER ORDER BUTTON */
                 <div className="w-full mt-6 space-y-3">
                   <button
-                    onClick={() => setCurrentView('menu')}
+                    onClick={() => changeView('menu')}
                     className="w-full py-4 px-6 rounded-2xl bg-[#9E341D] hover:bg-[#832B18] text-white font-black text-base shadow-lg shadow-[#9E341D]/25 flex items-center justify-center space-x-3 transition active:scale-98 group"
                   >
                     <Utensils className="w-5 h-5 group-hover:rotate-12 transition-transform" />
@@ -847,40 +849,57 @@ function CustomerOrderingContent() {
                     }`}
                   >
                     <div>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2">
-                            <span className="text-sm sm:text-base font-bold text-stone-950">{item.name}</span>
-                            {/* Dietary badge */}
-                            <span 
-                              className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                                item.dietary === 'VEG' 
-                                  ? 'bg-emerald-600' 
-                                  : item.dietary === 'SEAFOOD' 
-                                  ? 'bg-cyan-600' 
-                                  : 'bg-red-600'
-                              }`} 
-                              title={item.dietary}
+                      <div className="flex gap-3 items-start">
+                        {item.image && (
+                          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-stone-100 shrink-0 border border-stone-200/80 shadow-2xs">
+                            <img
+                              src={item.image}
+                              alt={item.name}
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                (e.target as HTMLElement).style.display = 'none';
+                              }}
                             />
                           </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1">
+                              <div className="flex items-center space-x-2">
+                                <span className="text-sm sm:text-base font-bold text-stone-950 truncate">{item.name}</span>
+                                {/* Dietary badge */}
+                                <span 
+                                  className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                                    item.dietary === 'VEG' 
+                                      ? 'bg-emerald-600' 
+                                      : item.dietary === 'SEAFOOD' 
+                                      ? 'bg-cyan-600' 
+                                      : 'bg-red-600'
+                                  }`} 
+                                  title={item.dietary}
+                                />
+                              </div>
 
-                          {item.malayalamName && (
-                            <div className="text-xs font-semibold text-[#9E341D] mt-0.5 font-malayalam-serif">
-                              {item.malayalamName}
+                              {item.malayalamName && (
+                                <div className="text-xs font-semibold text-[#9E341D] mt-0.5 font-malayalam-serif">
+                                  {item.malayalamName}
+                                </div>
+                              )}
                             </div>
+
+                            <span className="text-sm sm:text-base font-black text-stone-950 font-mono shrink-0">
+                              {formatRupees(item.pricePaise)}
+                            </span>
+                          </div>
+
+                          {item.description && (
+                            <p className="text-xs text-stone-500 mt-2 leading-relaxed">
+                              {item.description}
+                            </p>
                           )}
                         </div>
-
-                        <span className="text-sm sm:text-base font-black text-stone-950 font-mono shrink-0">
-                          {formatRupees(item.pricePaise)}
-                        </span>
                       </div>
-
-                      {item.description && (
-                        <p className="text-xs text-stone-500 mt-2 leading-relaxed">
-                          {item.description}
-                        </p>
-                      )}
                     </div>
 
                     <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between">
@@ -888,16 +907,32 @@ function CustomerOrderingContent() {
                         <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">
                           {item.dietary}
                         </span>
-                        {!item.isAvailable && (
-                          <span className="text-[10px] font-extrabold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
-                            Sold Out Today
-                          </span>
-                        )}
-                        {item.isAvailable && item.currentStock !== null && item.currentStock !== undefined && item.currentStock <= 5 && (
-                          <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
-                            Only {item.currentStock} left
-                          </span>
-                        )}
+                        {(() => {
+                          const stock = item.currentStock;
+                          const isSoldOut = !item.isAvailable || (typeof stock === 'number' && stock <= 0);
+                          if (isSoldOut) {
+                            return (
+                              <span className="text-[10px] font-extrabold text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
+                                Sold Out Today
+                              </span>
+                            );
+                          }
+                          if (typeof stock === 'number') {
+                            if (stock <= 5) {
+                              return (
+                                <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100/90 border border-amber-300 px-2 py-0.5 rounded-full">
+                                  ⚠️ Only {stock} left!
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                                📦 {stock} left
+                              </span>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
 
                       {/* Add to Cart Actions with Real-Time Stock Status */}
@@ -1136,7 +1171,7 @@ function CustomerOrderingContent() {
             {/* Quick Actions to Add More Dishes or Request Bill */}
             <div className="mt-6 pt-4 border-t border-stone-100 flex flex-col gap-2.5">
               <button
-                onClick={() => setCurrentView('menu')}
+                onClick={() => changeView('menu')}
                 className="w-full py-3.5 px-4 rounded-2xl bg-[#9E341D] hover:bg-[#832B18] text-white font-extrabold text-xs shadow-md flex items-center justify-center space-x-2 transition active:scale-98"
               >
                 <Plus className="w-4 h-4" />
@@ -1145,7 +1180,7 @@ function CustomerOrderingContent() {
 
               <div className="flex gap-2">
                 <button
-                  onClick={() => setCurrentView('welcome')}
+                  onClick={handleOrderBack}
                   className="flex-1 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 font-bold text-xs"
                 >
                   Table {tableCode} Details
@@ -1227,10 +1262,25 @@ function CustomerOrderingContent() {
               <div className="py-3 space-y-3 overflow-y-auto max-h-52 divide-y divide-stone-100">
                 {cart.map((c) => (
                   <div key={c.item.id} className="pt-2 flex items-center justify-between">
-                    <div>
-                      <div className="text-xs sm:text-sm font-bold text-stone-900">{c.item.name}</div>
-                      <div className="text-[11px] text-stone-400">
-                        {c.qty} x {formatRupees(c.item.pricePaise)}
+                    <div className="flex items-center space-x-2.5">
+                      {c.item.image && (
+                        <div className="w-9 h-9 rounded-lg overflow-hidden bg-stone-100 shrink-0 border border-stone-200">
+                          <img
+                            src={c.item.image}
+                            alt={c.item.name}
+                            className="w-full h-full object-cover"
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      )}
+                      <div>
+                        <div className="text-xs sm:text-sm font-bold text-stone-900">{c.item.name}</div>
+                        <div className="text-[11px] text-stone-400">
+                          {c.qty} x {formatRupees(c.item.pricePaise)}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">

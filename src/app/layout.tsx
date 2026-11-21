@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Manrope } from 'next/font/google';
 import './globals.css';
 import MobileBottomNav from '../components/MobileBottomNav';
+import ScreenLockGuard from '../components/ScreenLockGuard';
 
 const manrope = Manrope({
   subsets: ['latin'],
@@ -48,6 +49,7 @@ export default function RootLayout({
       </head>
       <body className={`${manrope.className} h-full flex flex-col font-sans bg-[#0C0E12] text-stone-100 antialiased selection:bg-zinc-800 selection:text-white pb-16 md:pb-0`}>
         {children}
+        <ScreenLockGuard />
         <MobileBottomNav />
       </body>
     </html>

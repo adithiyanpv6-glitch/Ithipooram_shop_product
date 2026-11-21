@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { db, refreshTableSummaries, persistDb, RestaurantOrder, KitchenTicket } from '@/lib/serverDb';
-import { autoDispatchTableExcelToTelegram } from '@/lib/autoTelegramExcelSync';
 import { pushLiveUpdateToGoogleWorkspace, pushOrderToGoogleDrive } from '@/lib/googleWorkspaceSync';
 
 const corsHeaders = {
@@ -91,10 +90,13 @@ export async function POST(request: Request) {
 
     const table = db.tables.find((t) => t.tableCode.toUpperCase() === tableCode.toUpperCase());
     const tableName = table ? table.displayName : `Table ${tableCode}`;
+    const roomName = table?.roomName || 'Dining Area';
 
     // Format incoming new items
     const formattedItems = items.map((it: any, idx: number) => {
-      const pricePaise = it.pricePaise || 12000;
+      const pricePaise = typeof it.pricePaise === 'number' && !isNaN(it.pricePaise)
+        ? Math.max(0, it.pricePaise)
+        : (typeof it.priceInr === 'number' && !isNaN(it.priceInr) ? Math.max(0, Math.round(it.priceInr * 100)) : 12000);
       const quantity = Math.max(1, it.quantity || it.qty || 1);
       const lineTotalPaise = pricePaise * quantity;
       
@@ -148,37 +150,28 @@ export async function POST(request: Request) {
         existingOrder.fulfillmentStatus = 'PREPARING'; // New round cooking
       }
 
-      // Create new kitchen ticket for just the newly added items tagged with Round info
-      const stationGroups: Record<string, typeof formattedItems> = {};
-      for (const it of formattedItems) {
-        if (!stationGroups[it.station]) stationGroups[it.station] = [];
-        stationGroups[it.station].push(it);
-      }
-
-      for (const [stn, stnItems] of Object.entries(stationGroups)) {
-        const stationName = stn as 'MAIN_KITCHEN' | 'SEAFOOD_FRY' | 'BEVERAGE_COUNTER';
-        const label = stationName === 'SEAFOOD_FRY' ? 'Tawa & Fry' : stationName === 'BEVERAGE_COUNTER' ? 'Beverages & Sweets' : 'Main Meals & Curries';
-
-        const ticket: KitchenTicket = {
-          id: `kt-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
-          orderId: existingOrder.id,
-          customerCode: `${existingOrder.customerCode} (Add-on Round ${existingOrder.roundCount})`,
-          tableCode: existingOrder.tableCode,
-          tableName: existingOrder.tableName,
-          station: stationName,
-          stationLabel: label,
-          status: 'NEW',
-          createdAtMs: Date.now(),
-          tableNotes: notes ? `ADD-ON (Round ${existingOrder.roundCount}): ${notes}` : `ADD-ON (Round ${existingOrder.roundCount})`,
-          items: stnItems.map((it) => ({
-            id: it.id,
-            name: it.itemName,
-            qty: it.quantity,
-            notes: it.notes,
-          })),
-        };
-        db.kitchenTickets.unshift(ticket);
-      }
+      // Create ONE unified kitchen ticket for all add-on items without category segregation into KDS
+      const ticket: KitchenTicket = {
+        id: `kt-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+        orderId: existingOrder.id,
+        customerCode: `${existingOrder.customerCode} (Add-on Round ${existingOrder.roundCount})`,
+        tableCode: existingOrder.tableCode,
+        tableName: existingOrder.tableName,
+        roomName: roomName,
+        station: 'MAIN_KITCHEN',
+        stationLabel: 'Order Ticket',
+        status: 'NEW',
+        createdAtMs: Date.now(),
+        tableNotes: notes ? `ADD-ON (Round ${existingOrder.roundCount}): ${notes}` : `ADD-ON (Round ${existingOrder.roundCount})`,
+        items: formattedItems.map((it) => ({
+          id: it.id,
+          name: it.itemName,
+          malayalamName: it.itemMalayalamName,
+          qty: it.quantity,
+          notes: it.notes,
+        })),
+      };
+      db.kitchenTickets.unshift(ticket);
 
       // Deduct available stock for each ordered add-on dish
       for (const it of formattedItems) {
@@ -186,7 +179,6 @@ export async function POST(request: Request) {
       }
 
       refreshTableSummaries();
-      persistDb();
 
       db.auditLogs.unshift({
         id: `aud-${Date.now()}`,
@@ -200,19 +192,31 @@ export async function POST(request: Request) {
         success: true,
       });
 
-      // Auto-dispatch updated multi-sheet Excel file to Telegram group
-      autoDispatchTableExcelToTelegram(`Add-on Order at Table ${tableCode} (Round ${existingOrder.roundCount})`).catch(() => {});
-      pushLiveUpdateToGoogleWorkspace().catch(() => {});
-      pushOrderToGoogleDrive(existingOrder).catch(() => {});
+      setTimeout(() => {
+        pushLiveUpdateToGoogleWorkspace().catch(() => {});
+        pushOrderToGoogleDrive(existingOrder).catch(() => {});
+      }, 0);
 
       return NextResponse.json({ success: true, order: existingOrder, isAddOn: true }, { status: 200, headers: corsHeaders });
     }
 
     // Brand new order (new customer or fresh session)
-    const existingTableOrders = db.orders.filter(
-      (o) => o.tableCode.toUpperCase() === tableCode.toUpperCase()
-    );
-    const nextSeq = existingTableOrders.length + 1;
+    // Calculate highest sequence number for this table today across active orders and history
+    let maxTableSeq = 0;
+    const tablePrefix = `${tableCode.toUpperCase()}-`;
+    for (const o of (db.orders || [])) {
+      if (o.tableCode?.toUpperCase() === tableCode.toUpperCase() && o.customerCode?.startsWith(tablePrefix)) {
+        const num = parseInt(o.customerCode.replace(tablePrefix, ''), 10);
+        if (!isNaN(num) && num > maxTableSeq) maxTableSeq = num;
+      }
+    }
+    for (const h of (db.historicalSales || [])) {
+      if (h.tableCode?.toUpperCase() === tableCode.toUpperCase() && h.orderCode?.startsWith(tablePrefix)) {
+        const num = parseInt(h.orderCode.replace(tablePrefix, ''), 10);
+        if (!isNaN(num) && num > maxTableSeq) maxTableSeq = num;
+      }
+    }
+    const nextSeq = maxTableSeq + 1;
     const customerCode = `${tableCode.toUpperCase()}-${String(nextSeq).padStart(2, '0')}`;
 
     const subtotalPaise = formattedItems.reduce((acc, it) => acc + it.lineTotalPaise, 0);
@@ -240,37 +244,28 @@ export async function POST(request: Request) {
 
     db.orders.unshift(newOrder);
 
-    // Generate kitchen tickets immediately for KDS display
-    const stationGroups: Record<string, typeof formattedItems> = {};
-    for (const it of formattedItems) {
-      if (!stationGroups[it.station]) stationGroups[it.station] = [];
-      stationGroups[it.station].push(it);
-    }
-
-    for (const [stn, stnItems] of Object.entries(stationGroups)) {
-      const stationName = stn as 'MAIN_KITCHEN' | 'SEAFOOD_FRY' | 'BEVERAGE_COUNTER';
-      const label = stationName === 'SEAFOOD_FRY' ? 'Tawa & Fry' : stationName === 'BEVERAGE_COUNTER' ? 'Beverages & Sweets' : 'Main Meals & Curries';
-
-      const ticket: KitchenTicket = {
-        id: `kt-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
-        orderId: newOrder.id,
-        customerCode: newOrder.customerCode,
-        tableCode: newOrder.tableCode,
-        tableName: newOrder.tableName,
-        station: stationName,
-        stationLabel: label,
-        status: 'NEW',
-        createdAtMs: Date.now(),
-        tableNotes: notes,
-        items: stnItems.map((it) => ({
-          id: it.id,
-          name: it.itemName,
-          qty: it.quantity,
-          notes: it.notes,
-        })),
-      };
-      db.kitchenTickets.unshift(ticket);
-    }
+    // Generate ONE single kitchen ticket for the entire order without category segregation into KDS
+    const ticket: KitchenTicket = {
+      id: `kt-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+      orderId: newOrder.id,
+      customerCode: newOrder.customerCode,
+      tableCode: newOrder.tableCode,
+      tableName: newOrder.tableName,
+      roomName: roomName,
+      station: 'MAIN_KITCHEN',
+      stationLabel: 'Order Ticket',
+      status: 'NEW',
+      createdAtMs: Date.now(),
+      tableNotes: notes,
+      items: formattedItems.map((it) => ({
+        id: it.id,
+        name: it.itemName,
+        malayalamName: it.itemMalayalamName,
+        qty: it.quantity,
+        notes: it.notes,
+      })),
+    };
+    db.kitchenTickets.unshift(ticket);
 
     // Deduct available stock for each ordered dish
     for (const it of formattedItems) {
@@ -278,7 +273,6 @@ export async function POST(request: Request) {
     }
 
     refreshTableSummaries();
-    persistDb();
 
     db.auditLogs.unshift({
       id: `aud-${Date.now()}`,
@@ -292,10 +286,10 @@ export async function POST(request: Request) {
       success: true,
     });
 
-    // Auto-dispatch updated multi-sheet Excel file to Telegram group
-    autoDispatchTableExcelToTelegram(`New Customer Order at Table ${tableCode} (${customerCode})`).catch(() => {});
-    pushLiveUpdateToGoogleWorkspace().catch(() => {});
-    pushOrderToGoogleDrive(newOrder).catch(() => {});
+    setTimeout(() => {
+      pushLiveUpdateToGoogleWorkspace().catch(() => {});
+      pushOrderToGoogleDrive(newOrder).catch(() => {});
+    }, 0);
 
     return NextResponse.json({ success: true, order: newOrder, isAddOn: false }, { status: 201, headers: corsHeaders });
   } catch (err: any) {
@@ -328,12 +322,14 @@ export async function PATCH(request: Request) {
         const stationName = stn as 'MAIN_KITCHEN' | 'SEAFOOD_FRY' | 'BEVERAGE_COUNTER';
         const label = stationName === 'SEAFOOD_FRY' ? 'Tawa & Fry' : stationName === 'BEVERAGE_COUNTER' ? 'Beverages & Sweets' : 'Main Meals & Curries';
 
+        const ticketRoom = (db.tables.find((t) => t.tableCode.toUpperCase() === order.tableCode.toUpperCase())?.roomName) || (order as any).roomName || 'Dining Area';
         const ticket: KitchenTicket = {
           id: `kt-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
           orderId: order.id,
           customerCode: order.customerCode,
           tableCode: order.tableCode,
           tableName: order.tableName,
+          roomName: ticketRoom,
           station: stationName,
           stationLabel: label,
           status: 'NEW',
@@ -349,7 +345,6 @@ export async function PATCH(request: Request) {
       }
 
       refreshTableSummaries();
-      persistDb();
       db.auditLogs.unshift({
         id: `aud-${Date.now()}`,
         timestamp: new Date().toISOString(),

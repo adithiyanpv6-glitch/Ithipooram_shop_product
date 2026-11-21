@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db, persistDb } from '@/lib/serverDb';
-import { autoDispatchMenuExcelToTelegram } from '@/lib/autoTelegramMenuSync';
+import { pushLiveUpdateToGoogleWorkspace } from '@/lib/googleWorkspaceSync';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +21,6 @@ export async function GET() {
       ...corsHeaders,
       'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
       'CDN-Cache-Control': 'no-store',
-      'Vercel-CDN-Cache-Control': 'no-store',
     } 
   });
 }
@@ -39,8 +38,8 @@ export async function POST(request: Request) {
       ? Number(pricePaise) 
       : Math.round(Number(priceInr || 0) * 100);
 
-    if (calculatedPricePaise <= 0) {
-      return NextResponse.json({ error: 'Valid price is required' }, { status: 400, headers: corsHeaders });
+    if (isNaN(calculatedPricePaise) || calculatedPricePaise < 0) {
+      return NextResponse.json({ error: 'Valid price (₹0 or greater) is required' }, { status: 400, headers: corsHeaders });
     }
 
     const categoryName = (category || 'Special Delicacies').trim();
@@ -75,6 +74,7 @@ export async function POST(request: Request) {
 
     // Save state to disk immediately
     persistDb();
+    pushLiveUpdateToGoogleWorkspace().catch(() => {});
 
     // Audit log entry
     db.auditLogs.unshift({
@@ -86,13 +86,6 @@ export async function POST(request: Request) {
       reason: `Added new dish "${newItem.name}" to ${targetCat.name} for ₹${(newItem.pricePaise / 100).toFixed(2)}`,
       success: true,
     });
-
-    // Automatically update Datewise Menu Database and dispatch Excel to Telegram
-    try {
-      await autoDispatchMenuExcelToTelegram(`New Dish Added: ${newItem.name} (₹${(newItem.pricePaise / 100).toFixed(2)})`);
-    } catch (tgErr) {
-      console.error('Menu telegram auto-dispatch error:', tgErr);
-    }
 
     return NextResponse.json({ success: true, item: newItem, categories: db.menuCategories }, { headers: corsHeaders });
   } catch (err: any) {
@@ -106,6 +99,7 @@ export async function PUT(request: Request) {
     if (Array.isArray(body.categories)) {
       db.menuCategories = body.categories;
       persistDb();
+      pushLiveUpdateToGoogleWorkspace().catch(() => {});
       return NextResponse.json({ success: true, categories: db.menuCategories }, { headers: corsHeaders });
     }
     return NextResponse.json({ error: 'categories must be an array' }, { status: 400, headers: corsHeaders });
@@ -148,6 +142,7 @@ export async function PATCH(request: Request) {
 
     // Save state to disk immediately
     persistDb();
+    pushLiveUpdateToGoogleWorkspace().catch(() => {});
 
     // Add audit log entry
     db.auditLogs.unshift({
@@ -160,13 +155,6 @@ export async function PATCH(request: Request) {
       success: true,
     });
 
-    // Automatically update Datewise Menu Database and dispatch Excel to Telegram
-    try {
-      await autoDispatchMenuExcelToTelegram(`Menu Item Updated: ${updatedItem.name}`);
-    } catch (tgErr) {
-      console.error('Menu telegram auto-dispatch error:', tgErr);
-    }
-
     return NextResponse.json({ success: true, item: updatedItem }, { headers: corsHeaders });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500, headers: corsHeaders });
@@ -177,9 +165,21 @@ export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const itemId = searchParams.get('itemId');
+    const categoryId = searchParams.get('categoryId');
+
+    if (categoryId) {
+      const idx = db.menuCategories.findIndex((c) => c.id === categoryId || c.name.toLowerCase() === categoryId.toLowerCase());
+      if (idx !== -1) {
+        const deletedCat = db.menuCategories.splice(idx, 1)[0];
+        persistDb();
+        pushLiveUpdateToGoogleWorkspace().catch(() => {});
+        return NextResponse.json({ success: true, deletedCategory: deletedCat.name, categories: db.menuCategories }, { headers: corsHeaders });
+      }
+      return NextResponse.json({ error: 'Category not found' }, { status: 404, headers: corsHeaders });
+    }
 
     if (!itemId) {
-      return NextResponse.json({ error: 'itemId query param is required' }, { status: 400, headers: corsHeaders });
+      return NextResponse.json({ error: 'itemId or categoryId query param is required' }, { status: 400, headers: corsHeaders });
     }
 
     let deletedName = '';
@@ -196,6 +196,7 @@ export async function DELETE(request: Request) {
     db.menuCategories = db.menuCategories.filter((c) => c.items.length > 0);
 
     persistDb();
+    pushLiveUpdateToGoogleWorkspace().catch(() => {});
 
     db.auditLogs.unshift({
       id: `aud-${Date.now()}`,

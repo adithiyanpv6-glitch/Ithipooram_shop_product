@@ -16,10 +16,25 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: corsHeaders });
 }
 
-const DEFAULT_TUNNEL_URL = process.env.CLOUDFLARE_TUNNEL_URL || 'https://admin-app-ithipooram.vercel.app';
+const DEFAULT_TUNNEL_URL = process.env.CLOUDFLARE_TUNNEL_URL || 'http://localhost:3000';
 const TUNNEL_FILE = path.join(process.cwd(), 'data', 'tunnel_url.txt');
+const WORKER_FILE = path.join(process.cwd(), 'data', 'cloudflare_worker_url.txt');
 
 export async function GET() {
+  // If permanent Cloudflare Worker is registered, use it as primary QR base URL
+  if (fs.existsSync(WORKER_FILE)) {
+    try {
+      const workerUrl = fs.readFileSync(WORKER_FILE, 'utf8').trim();
+      if (workerUrl && workerUrl.startsWith('http')) {
+        return NextResponse.json({
+          tunnelUrl: workerUrl,
+          isPermanentWorker: true,
+          workerUrl: workerUrl
+        }, { headers: corsHeaders });
+      }
+    } catch (e) {}
+  }
+
   let activeUrl = global.__CLOUDFLARE_TUNNEL_URL__;
   if (!activeUrl && fs.existsSync(TUNNEL_FILE)) {
     try {

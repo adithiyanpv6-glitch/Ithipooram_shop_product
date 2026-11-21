@@ -1,185 +1,129 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db, StaffLoginSession, StaffActivityLog, generateStaffId, persistDb } from '@/lib/serverDb';
-import { syncStaffSessionDatabasePinned } from '@/lib/telegramPinnedVault';
+import { db, isMasterPinSet, setMasterPin, verifyMasterPin, persistDb } from '@/lib/serverDb';
 import { pushLiveUpdateToGoogleWorkspace } from '@/lib/googleWorkspaceSync';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: corsHeaders });
+}
+
+export async function GET() {
+  return NextResponse.json({
+    isConfigured: isMasterPinSet(),
+  }, { headers: corsHeaders });
+}
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const rawInput = (body.username || '').trim();
-    const inputUser = rawInput.toLowerCase().replace(/\s+/g, '');
     const inputPin = (body.password || body.pin || '').trim();
-    const isAdminOverride = inputPin === '5566' || inputPin === '1111';
 
     if (!inputPin) {
-      return NextResponse.json({ error: '4-digit password / PIN is required.' }, { status: 400 });
+      return NextResponse.json(
+        { error: '4-digit Security PIN is required.' },
+        { status: 400, headers: corsHeaders }
+      );
     }
 
-    if (!db.staffUsers) {
-      db.staffUsers = [];
-    }
-    if (!db.loginSessions) {
-      db.loginSessions = [];
-    }
-    if (!db.staffActivityLogs) {
-      db.staffActivityLogs = [];
-    }
+    let user: any = null;
 
-    // Lookup staff by username or by PIN if username omitted (for fast touchscreen 1-tap PIN login)
-    let foundStaff = db.staffUsers.find((s) => {
-      if (inputUser) {
-        return (
-          s.username.toLowerCase().replace(/\s+/g, '') === inputUser ||
-          s.fullName.toLowerCase().replace(/\s+/g, '') === inputUser ||
-          s.id.toLowerCase() === inputUser
+    // If master PIN is not yet configured, first-time user PIN entry sets the master PIN
+    if (!isMasterPinSet()) {
+      if (inputPin.length < 4) {
+        return NextResponse.json(
+          { error: 'Security PIN must be at least 4 digits.' },
+          { status: 400, headers: corsHeaders }
         );
       }
-      return s.pin === inputPin;
-    });
-
-    // Default fast role PINs support (Manager 5566, Cashier 7788, Chef 1122, Master Admin 1111)
-    if (!foundStaff) {
-      if (inputPin === '5566' || inputPin === '1111') {
-        foundStaff = {
-          id: 'admin-master',
-          fullName: 'Main Administrator',
-          username: 'admin',
-          pin: inputPin,
-          role: 'MAIN_ADMIN',
-          station: 'Executive Central Gateway',
-          isActive: true,
-          registeredAt: new Date().toLocaleString('en-IN'),
-          totalLogins: 1,
+      setMasterPin(inputPin);
+      console.log('[Security Engine] Initial Master Security PIN registered and saved to master database.');
+      user = {
+        id: 'owner',
+        username: 'admin',
+        fullName: 'System Administrator',
+        role: 'MAIN_ADMIN',
+        station: 'POS Main Terminal',
+      };
+    } else if (verifyMasterPin(inputPin)) {
+      // Validated against Master PIN (System Administrator)
+      user = {
+        id: 'owner',
+        username: 'admin',
+        fullName: 'System Administrator',
+        role: 'MAIN_ADMIN',
+        station: 'POS Main Terminal',
+      };
+    } else {
+      // Check registered staff members in master database
+      const matchedStaff = (db.staffUsers || []).find((s) => s.pin === inputPin);
+      if (matchedStaff) {
+        user = {
+          id: matchedStaff.id,
+          username: matchedStaff.username || matchedStaff.fullName,
+          fullName: matchedStaff.fullName,
+          role: matchedStaff.role || 'CASHIER',
+          station: matchedStaff.station || 'Billing Counter POS 1',
         };
-      } else if (inputPin === '7788') {
-        foundStaff = {
-          id: 'cashier-master',
-          fullName: 'Counter Cashier',
-          username: 'cashier',
-          pin: '7788',
-          role: 'CASHIER',
-          station: 'Billing Counter POS 1',
-          isActive: true,
-          registeredAt: new Date().toLocaleString('en-IN'),
-          totalLogins: 1,
-        };
-      } else if (inputPin === '1122') {
-        foundStaff = {
-          id: 'chef-master',
-          fullName: 'Kitchen Chef Head',
-          username: 'chef',
-          pin: '1122',
-          role: 'KITCHEN_STAFF',
-          station: 'Main Kitchen Display (KDS)',
-          isActive: true,
-          registeredAt: new Date().toLocaleString('en-IN'),
-          totalLogins: 1,
-        };
+      } else {
+        return NextResponse.json(
+          { error: 'Incorrect Security PIN. Please try again.' },
+          { status: 401, headers: corsHeaders }
+        );
       }
     }
 
-    if (!foundStaff) {
-      // Log failed attempt
-      const failedLog: StaffActivityLog = {
-        id: `LOG-${Date.now().toString().slice(-6)}`,
-        timestamp: new Date().toLocaleString('en-IN'),
-        actionType: 'LOGIN_FAILED',
-        usernameSnapshot: inputUser,
-        fullNameSnapshot: body.username || inputUser,
-        roleSnapshot: 'UNKNOWN',
-        details: `Sign-in failed: Account not found for "${body.username || inputUser}".`,
-        success: false,
-      };
-      db.staffActivityLogs.unshift(failedLog);
-
-      return NextResponse.json(
-        { error: `User "${body.username || inputUser || 'Staff'}" not found. Please register as new staff.` },
-        { status: 404 }
-      );
-    }
-
-    // Verify PIN
-    if (!isAdminOverride && foundStaff.pin !== inputPin) {
-      const failedLog: StaffActivityLog = {
-        id: `LOG-${Date.now().toString().slice(-6)}`,
-        timestamp: new Date().toLocaleString('en-IN'),
-        actionType: 'LOGIN_FAILED',
-        usernameSnapshot: foundStaff.username,
-        fullNameSnapshot: foundStaff.fullName,
-        roleSnapshot: foundStaff.role,
-        details: `Sign-in failed: Incorrect 4-digit PIN entered.`,
-        success: false,
-      };
-      db.staffActivityLogs.unshift(failedLog);
-
-      return NextResponse.json(
-        { error: 'Incorrect 4-digit password / PIN. Please try again.' },
-        { status: 401 }
-      );
-    }
-
-    // Increment logins
-    foundStaff.totalLogins = (foundStaff.totalLogins || 0) + 1;
-
-    // Create session
-    const sessionId = `SES-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${Date.now().toString().slice(-4)}`;
     const now = new Date();
-    const newSession: StaffLoginSession = {
+    const sessionId = `SES-${now.toISOString().slice(0, 10).replace(/-/g, '')}-${Date.now().toString().slice(-4)}`;
+
+    // Record login session for staff tracking
+    if (!db.loginSessions) db.loginSessions = [];
+    db.loginSessions.unshift({
       sessionId,
-      staffId: foundStaff.id,
-      fullName: foundStaff.fullName,
-      username: foundStaff.username,
-      role: foundStaff.role,
-      station: foundStaff.station || 'POS Tablet Terminal',
+      staffId: user.id,
+      fullName: user.fullName,
+      username: user.username,
+      role: user.role,
+      station: user.station,
       loginDate: now.toLocaleDateString('en-GB'),
       loginTime: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      clientIp: req.headers.get('x-forwarded-for') || 'POS Tablet Terminal',
+      clientIp: req.headers.get('x-forwarded-for') || '127.0.0.1',
       status: 'ACTIVE',
       lastActive: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-    };
-    db.loginSessions.unshift(newSession);
+    });
 
-    // Keep top 100 sessions
-    if (db.loginSessions.length > 100) {
-      db.loginSessions = db.loginSessions.slice(0, 100);
-    }
-
-    // Record Activity Log
-    const successLog: StaffActivityLog = {
+    if (!db.staffActivityLogs) db.staffActivityLogs = [];
+    db.staffActivityLogs.unshift({
       id: `LOG-${Date.now().toString().slice(-6)}`,
       timestamp: now.toLocaleString('en-IN'),
       actionType: 'LOGIN_SUCCESS',
-      usernameSnapshot: foundStaff.username,
-      fullNameSnapshot: foundStaff.fullName,
-      roleSnapshot: foundStaff.role,
-      details: `Sign-in authenticated for ${foundStaff.fullName} (${foundStaff.role}). Session ${sessionId} active.`,
+      usernameSnapshot: user.username,
+      fullNameSnapshot: user.fullName,
+      roleSnapshot: user.role,
+      details: `${user.fullName} (${user.role}) logged in at ${user.station}`,
       success: true,
-    };
-    db.staffActivityLogs.unshift(successLog);
+    });
 
-    // Update live session Excel database in-place on Telegram
-    syncStaffSessionDatabasePinned().catch(() => {});
-
-    // Live update to Google Workspace (adithiyanpv6@gmail.com)
-    pushLiveUpdateToGoogleWorkspace().catch(() => {});
-
-    // Save staff login session and updated login counts to disk immediately
     persistDb();
 
+    pushLiveUpdateToGoogleWorkspace().catch(() => {});
+
     return NextResponse.json({
-      message: 'Login successful',
-      token: `jwt-session-${foundStaff.id}-${Date.now()}`,
+      success: true,
+      message: 'Authentication successful',
+      token: `jwt-master-${Date.now()}`,
       sessionId,
-      user: {
-        id: foundStaff.id,
-        username: foundStaff.username,
-        fullName: foundStaff.fullName,
-        role: foundStaff.role,
-        station: foundStaff.station,
-      },
-    });
+      user,
+    }, { headers: corsHeaders });
   } catch (err: any) {
     console.error('Login error:', err);
-    return NextResponse.json({ error: err.message || 'Server error during authentication' }, { status: 500 });
+    return NextResponse.json(
+      { error: err.message || 'Server error during authentication' },
+      { status: 500, headers: corsHeaders }
+    );
   }
 }

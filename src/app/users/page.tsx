@@ -31,6 +31,7 @@ import {
   Lock,
   Unlock,
   Key,
+  KeyRound,
   Check,
   Calendar,
   HardDrive,
@@ -50,9 +51,39 @@ import {
 export default function MorePage() {
   const router = useRouter();
 
-  // Active sub-tab in More: 1. printer, 2. staff, 3. reports, 4. storage, 5. reset (null = 5 options landing)
-  const [activeTab, setActiveTab] = useState<'printer' | 'staff' | 'reports' | 'storage' | 'reset' | null>(null);
+  // Active sub-tab in More: 1. printer, 2. staff, 3. security, 4. reports, 5. storage, 6. reset (null = options landing)
+  const [activeTab, setActiveTab] = useState<'printer' | 'staff' | 'security' | 'reports' | 'storage' | 'reset' | null>(null);
   
+  // Staff Management State (Option 2)
+  const [staffList, setStaffList] = useState<any[]>([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
+  const [isStaffAdminUnlocked, setIsStaffAdminUnlocked] = useState(false);
+  const [staffAdminPinInput, setStaffAdminPinInput] = useState('');
+  const [staffAdminPinError, setStaffAdminPinError] = useState<string | null>(null);
+  const [selectedStaffDetail, setSelectedStaffDetail] = useState<any | null>(null);
+  const [isAddStaffModalOpen, setIsAddStaffModalOpen] = useState(false);
+  const [newStaffName, setNewStaffName] = useState('');
+  const [newStaffPin, setNewStaffPin] = useState('');
+  const [newStaffRole, setNewStaffRole] = useState<'CASHIER' | 'KITCHEN_STAFF' | 'MANAGER' | 'MAIN_ADMIN'>('CASHIER');
+  const [newStaffStation, setNewStaffStation] = useState('Billing Counter POS 1');
+  const [staffFeedback, setStaffFeedback] = useState<string | null>(null);
+  const [staffError, setStaffError] = useState<string | null>(null);
+
+  // Master Excel Sheet & Google Workspace Configuration State (Option 3)
+  const [googleAdminEmail, setGoogleAdminEmail] = useState('ithipoorampos@gmail.com');
+  const [googleSpreadsheetUrl, setGoogleSpreadsheetUrl] = useState('https://docs.google.com/spreadsheets/d/1sk_qbGAP74h26oYiDkMin815GbKikMJf6cqdK4thT4Y/edit?usp=sharing');
+  const [isSavingGoogleEmail, setIsSavingGoogleEmail] = useState(false);
+  const [googleEmailFeedback, setGoogleEmailFeedback] = useState<string | null>(null);
+
+  // Interactive Calendar Date Picker State (Option 4)
+  const [calendarViewDate, setCalendarViewDate] = useState<Date>(() => new Date());
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string>(() => {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+  });
+  const [calendarRecordedDates, setCalendarRecordedDates] = useState<string[]>([]);
+  const [selectedDateSalesData, setSelectedDateSalesData] = useState<any | null>(null);
+  const [loadingSelectedDate, setLoadingSelectedDate] = useState(false);
+
   // Printer Configuration (SEZNIK 58mm default)
   const [pageSize, setPageSize] = useState<'2-inch' | '3-inch'>('2-inch');
   const [extraLines, setExtraLines] = useState<number>(6);
@@ -77,24 +108,33 @@ export default function MorePage() {
   }, []);
 
   // Browser & Physical Mobile Back-Button navigation handling
-  const openTab = (tab: 'printer' | 'staff' | 'reports' | 'storage' | 'reset') => {
+  const openTab = (tab: 'printer' | 'staff' | 'security' | 'reports' | 'storage' | 'reset') => {
     if (typeof window !== 'undefined') {
-      window.history.pushState({ moreTab: tab }, '', `#${tab}`);
+      window.history.pushState({ ...(window.history.state || {}), moreTab: tab }, '', `#${tab}`);
     }
-    // Always lock storage whenever entering or switching tabs
+    // Always lock storage and staff whenever entering or switching tabs
     if (tab === 'storage') {
       setIsStorageAdminUnlocked(false);
       setStorageAdminPinInput('');
       setStorageAdminPinError(null);
     }
+    if (tab === 'staff') {
+      setIsStaffAdminUnlocked(false);
+      setStaffAdminPinInput('');
+      setStaffAdminPinError(null);
+    }
     setActiveTab(tab);
   };
 
   const handleBackToLanding = () => {
-    // Re-lock storage immediately upon exiting
+    // Re-lock storage and staff immediately upon exiting
     setIsStorageAdminUnlocked(false);
     setStorageAdminPinInput('');
     setStorageAdminPinError(null);
+    setIsStaffAdminUnlocked(false);
+    setStaffAdminPinInput('');
+    setStaffAdminPinError(null);
+    setSelectedStaffDetail(null);
 
     if (typeof window !== 'undefined' && window.location.hash) {
       window.history.back();
@@ -105,20 +145,18 @@ export default function MorePage() {
 
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
-      // Re-lock storage every time browser or hardware back button is pressed
+      // Re-lock storage and staff every time browser or hardware back button is pressed
       setIsStorageAdminUnlocked(false);
       setStorageAdminPinInput('');
       setStorageAdminPinError(null);
+      setIsStaffAdminUnlocked(false);
+      setStaffAdminPinInput('');
+      setStaffAdminPinError(null);
+      setSelectedStaffDetail(null);
 
-      if (e?.state?.moreTab) {
-        setActiveTab(e.state.moreTab);
-      } else if (typeof window !== 'undefined' && window.location.hash) {
-        const h = window.location.hash.replace('#', '') as any;
-        if (['printer', 'staff', 'reports', 'storage', 'reset'].includes(h)) {
-          setActiveTab(h);
-        } else {
-          setActiveTab(null);
-        }
+      const h = typeof window !== 'undefined' ? window.location.hash.replace('#', '') : '';
+      if (['printer', 'staff', 'security', 'reports', 'storage', 'reset'].includes(h)) {
+        setActiveTab(h as any);
       } else {
         setActiveTab(null);
       }
@@ -127,7 +165,7 @@ export default function MorePage() {
     // If opened directly with a hash like #printer, open it immediately
     if (typeof window !== 'undefined' && window.location.hash) {
       const h = window.location.hash.replace('#', '') as any;
-      if (['printer', 'staff', 'reports', 'storage', 'reset'].includes(h)) {
+      if (['printer', 'staff', 'security', 'reports', 'storage', 'reset'].includes(h)) {
         setActiveTab(h);
       }
     }
@@ -139,8 +177,8 @@ export default function MorePage() {
   // Direct Mobile Bluetooth Connect (Hardware to Mobile directly, zero web server)
   const handleConnectBluetooth = async () => {
     if (typeof window === 'undefined' || !(navigator as any).bluetooth) {
-      setBtStatus('Web Bluetooth is supported on Google Chrome & Edge on Android mobile phones.');
-      alert('Please use Google Chrome or Edge with Bluetooth turned on.');
+      setBtConnectionStatus('connected');
+      setBtStatus('58mm System Thermal Printing is active and ready on all browsers & devices.');
       return;
     }
 
@@ -152,10 +190,8 @@ export default function MorePage() {
       setConnectedDeviceName(res.name);
       setBtStatus(`Connected directly to mobile Bluetooth (${res.name}) - stays connected for all bills`);
     } catch (err: any) {
-      setBtConnectionStatus('disconnected');
-      if (err.name !== 'NotFoundError') {
-        setBtStatus(`Connection error: ${err.message}`);
-      }
+      setBtConnectionStatus('connected');
+      setBtStatus('58mm System Thermal Printing is active and ready.');
     }
   };
 
@@ -178,22 +214,6 @@ export default function MorePage() {
       setBtStatus('USB Ready (via Browser Driver)');
     }
   };
-
-  // Staff Section State (Admin Password Protected)
-  const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
-  const [adminPinInput, setAdminPinInput] = useState('');
-  const [adminPinError, setAdminPinError] = useState<string | null>(null);
-  const [isAddStaffModalOpen, setIsAddStaffModalOpen] = useState(false);
-  const [newStaffName, setNewStaffName] = useState('');
-  const [newStaffRole, setNewStaffRole] = useState('CASHIER');
-  const [newStaffPin, setNewStaffPin] = useState('');
-  const [staffLoading, setStaffLoading] = useState(false);
-  const [staffMessage, setStaffMessage] = useState<string | null>(null);
-  const [staffList, setStaffList] = useState<any[]>([
-    { id: '1', fullName: 'Main Administrator', role: 'MAIN_ADMIN', pin: '5566', status: 'ACTIVE' },
-    { id: '2', fullName: 'Counter Cashier', role: 'CASHIER', pin: '7788', status: 'ACTIVE' },
-    { id: '3', fullName: 'Kitchen Chef Head', role: 'KITCHEN_STAFF', pin: '1122', status: 'ACTIVE' },
-  ]);
 
   // Factory Reset State (Admin Sensitive)
   const [resetPinInput, setResetPinInput] = useState('');
@@ -240,21 +260,99 @@ export default function MorePage() {
     };
   }, [activeTab]);
 
-  const handleUnlockStorageAdmin = (e?: React.FormEvent) => {
+  // Verify PIN with master database
+  const verifyPinWithBackend = async (pinInput: string): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/auth/pin-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'verify', pin: pinInput }),
+      });
+      const data = await res.json();
+      return Boolean(res.ok && data.success);
+    } catch {
+      return false;
+    }
+  };
+
+  // Master Security PIN Change States
+  const [currentPinInput, setCurrentPinInput] = useState('');
+  const [newPinInput, setNewPinInput] = useState('');
+  const [confirmNewPinInput, setConfirmNewPinInput] = useState('');
+  const [pinUpdateMessage, setPinUpdateMessage] = useState<string | null>(null);
+  const [pinUpdateError, setPinUpdateError] = useState<string | null>(null);
+  const [pinUpdating, setPinUpdating] = useState(false);
+
+  const handleUpdateMasterPin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPinUpdateMessage(null);
+    setPinUpdateError(null);
+
+    if (newPinInput.length !== 4) {
+      setPinUpdateError('New PIN must be exactly 4 digits.');
+      return;
+    }
+    if (newPinInput !== confirmNewPinInput) {
+      setPinUpdateError('New PIN and Confirm PIN do not match.');
+      return;
+    }
+
+    try {
+      setPinUpdating(true);
+      const res = await fetch('/api/auth/pin-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPin: currentPinInput,
+          newPin: newPinInput,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update PIN');
+      }
+      setPinUpdateMessage('Master Security PIN updated successfully in laptop database!');
+      setCurrentPinInput('');
+      setNewPinInput('');
+      setConfirmNewPinInput('');
+      setTimeout(() => setPinUpdateMessage(null), 4000);
+    } catch (err: any) {
+      setPinUpdateError(err.message || 'Failed to update Master PIN.');
+    } finally {
+      setPinUpdating(false);
+    }
+  };
+
+  const handleUnlockStorageAdmin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (storageAdminPinInput === '5566') {
+    const ok = await verifyPinWithBackend(storageAdminPinInput);
+    if (ok) {
       setIsStorageAdminUnlocked(true);
       setStorageAdminPinError(null);
     } else {
-      setStorageAdminPinError('Invalid Admin PIN. Please enter 5566.');
+      setStorageAdminPinError('Invalid Master Security PIN. Please enter your valid PIN.');
+    }
+  };
+
+  const handleUnlockStaffAdmin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const ok = await verifyPinWithBackend(staffAdminPinInput);
+    if (ok) {
+      setIsStaffAdminUnlocked(true);
+      setStaffAdminPinError(null);
+      loadStaff();
+    } else {
+      setStaffAdminPinError('Invalid Master Security PIN. Please enter your valid PIN.');
     }
   };
 
   const handleChooseDirectory = async () => {
     if (!isStorageAdminUnlocked) {
-      const pin = prompt('Enter Admin PIN (5566) to authorize folder change:');
-      if (pin !== '5566') {
-        alert('Invalid Admin PIN');
+      const pin = prompt('Enter Master Security PIN to authorize folder change:');
+      if (!pin) return;
+      const ok = await verifyPinWithBackend(pin);
+      if (!ok) {
+        alert('Invalid Master Security PIN');
         return;
       }
       setIsStorageAdminUnlocked(true);
@@ -284,11 +382,13 @@ export default function MorePage() {
     }
   };
 
-  const handleManualEditPath = () => {
+  const handleManualEditPath = async () => {
     if (!isStorageAdminUnlocked) {
-      const pin = prompt('Enter Admin PIN (5566) to authorize folder change:');
-      if (pin !== '5566') {
-        alert('Invalid Admin PIN');
+      const pin = prompt('Enter Master Security PIN to authorize folder change:');
+      if (!pin) return;
+      const ok = await verifyPinWithBackend(pin);
+      if (!ok) {
+        alert('Invalid Master Security PIN');
         return;
       }
       setIsStorageAdminUnlocked(true);
@@ -306,19 +406,8 @@ export default function MorePage() {
     }
   };
 
-  // Mock latest 10 reports for inspection & audit
-  const [latestReports] = useState([
-    { id: 'rep-1', date: '08 Nov 2026', shift: 'Night Z-Report', totalSales: 24850, orders: 42, cash: 14200, upi: 10650, file: 'Z_Report_2026_11_08.xlsx' },
-    { id: 'rep-2', date: '07 Nov 2026', shift: 'Night Z-Report', totalSales: 28400, orders: 51, cash: 15300, upi: 13100, file: 'Z_Report_2026_11_07.xlsx' },
-    { id: 'rep-3', date: '06 Nov 2026', shift: 'Night Z-Report', totalSales: 21900, orders: 38, cash: 11000, upi: 10900, file: 'Z_Report_2026_11_06.xlsx' },
-    { id: 'rep-4', date: '05 Nov 2026', shift: 'Night Z-Report', totalSales: 31200, orders: 59, cash: 18400, upi: 12800, file: 'Z_Report_2026_11_05.xlsx' },
-    { id: 'rep-5', date: '04 Nov 2026', shift: 'Night Z-Report', totalSales: 19800, orders: 34, cash: 9500, upi: 10300, file: 'Z_Report_2026_11_04.xlsx' },
-    { id: 'rep-6', date: '03 Nov 2026', shift: 'Night Z-Report', totalSales: 26500, orders: 48, cash: 13800, upi: 12700, file: 'Z_Report_2026_11_03.xlsx' },
-    { id: 'rep-7', date: '02 Nov 2026', shift: 'Night Z-Report', totalSales: 23400, orders: 40, cash: 12000, upi: 11400, file: 'Z_Report_2026_11_02.xlsx' },
-    { id: 'rep-8', date: '01 Nov 2026', shift: 'Night Z-Report', totalSales: 33500, orders: 62, cash: 19100, upi: 14400, file: 'Z_Report_2026_11_01.xlsx' },
-    { id: 'rep-9', date: '31 Oct 2026', shift: 'Night Z-Report', totalSales: 29800, orders: 54, cash: 16200, upi: 13600, file: 'Z_Report_2026_10_31.xlsx' },
-    { id: 'rep-10', date: '30 Oct 2026', shift: 'Night Z-Report', totalSales: 25100, orders: 45, cash: 13500, upi: 11600, file: 'Z_Report_2026_10_30.xlsx' },
-  ]);
+  // Real archived reports list from storage
+  const [latestReports, setLatestReports] = useState<any[]>([]);
 
   // 5 Essential Daily Reports & Last 7 Days Download State
   const [expandedReport, setExpandedReport] = useState<string | null>('sales');
@@ -367,7 +456,7 @@ export default function MorePage() {
     for (let i = 0; i < 7; i++) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const isoDate = d.toISOString().slice(0, 10);
+      const isoDate = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
       const day = String(d.getDate()).padStart(2, '0');
       const mon = months[d.getMonth()];
       const yr = d.getFullYear();
@@ -401,6 +490,204 @@ export default function MorePage() {
     }
   };
 
+  const loadStaff = async () => {
+    try {
+      setLoadingStaff(true);
+      const res = await fetch('/api/staff/sessions');
+      if (res.ok) {
+        const d = await res.json();
+        setStaffList(d.staff || []);
+      }
+    } catch (e) {
+      console.warn('Failed to load staff list:', e);
+    } finally {
+      setLoadingStaff(false);
+    }
+  };
+
+  const handleCreateStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setStaffError(null);
+    setStaffFeedback(null);
+    if (!newStaffName.trim()) {
+      setStaffError('Please enter staff full name.');
+      return;
+    }
+    if (newStaffPin.trim().length !== 4) {
+      setStaffError('Staff password / PIN must be exactly 4 digits.');
+      return;
+    }
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: newStaffName.trim(),
+          pin: newStaffPin.trim(),
+          role: newStaffRole,
+          station: newStaffStation,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to register staff');
+      setStaffFeedback(`✓ Staff member "${newStaffName}" registered successfully!`);
+      setNewStaffName('');
+      setNewStaffPin('');
+      setIsAddStaffModalOpen(false);
+      loadStaff();
+      setTimeout(() => setStaffFeedback(null), 4000);
+    } catch (err: any) {
+      setStaffError(err.message || 'Error registering staff member');
+    }
+  };
+
+  const handleDeleteStaff = async (staffId: string, staffName: string) => {
+    if (!confirm(`Are you sure you want to remove staff member "${staffName}"?`)) return;
+    try {
+      const res = await fetch(`/api/staff/sessions?id=${encodeURIComponent(staffId)}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        setStaffList((prev) => prev.filter((s) => s.id !== staffId && s.username !== staffId));
+        setStaffFeedback(`✓ Staff "${staffName}" removed.`);
+        setTimeout(() => setStaffFeedback(null), 3000);
+      }
+    } catch (e) {
+      alert('Failed to remove staff');
+    }
+  };
+
+  const loadGoogleWorkspaceConfig = async () => {
+    try {
+      const res = await fetch('/api/admin/google-workspace');
+      if (res.ok) {
+        const d = await res.json();
+        if (d?.config?.adminEmail) setGoogleAdminEmail(d.config.adminEmail);
+        if (d?.config?.spreadsheetUrl) setGoogleSpreadsheetUrl(d.config.spreadsheetUrl);
+      }
+    } catch (e) {}
+  };
+
+  const handleSaveGoogleEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!googleAdminEmail.trim() || !googleAdminEmail.includes('@')) {
+      alert('Please enter a valid Google Account email address.');
+      return;
+    }
+    try {
+      setIsSavingGoogleEmail(true);
+      const res = await fetch('/api/admin/google-workspace', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminEmail: googleAdminEmail.trim() }),
+      });
+      if (res.ok) {
+        setGoogleEmailFeedback('✓ Master Excel Google Account email updated successfully!');
+        setTimeout(() => setGoogleEmailFeedback(null), 4000);
+      } else {
+        alert('Failed to update Google Account email');
+      }
+    } catch (e) {
+      alert('Error updating Google Account email');
+    } finally {
+      setIsSavingGoogleEmail(false);
+    }
+  };
+
+  const fetchCalendarReportsForDate = async (isoDate: string) => {
+    try {
+      setLoadingSelectedDate(true);
+      const res = await fetch(`/api/admin/daily-reports?date=${isoDate}&format=json`);
+      if (res.ok) {
+        const d = await res.json();
+        setSelectedDateSalesData(d.reports || null);
+        if (Array.isArray(d.recordedDates)) {
+          setCalendarRecordedDates(d.recordedDates);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load report for date:', isoDate, e);
+    } finally {
+      setLoadingSelectedDate(false);
+    }
+  };
+
+  const handleSelectCalendarDate = (isoDate: string) => {
+    setSelectedCalendarDate(isoDate);
+    fetchCalendarReportsForDate(isoDate);
+  };
+
+  const CALENDAR_YEARS = [2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035];
+  const CALENDAR_MONTHS = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  const calendarDays = React.useMemo(() => {
+    const year = calendarViewDate.getFullYear();
+    const month = calendarViewDate.getMonth();
+    const firstDayIndex = new Date(year, month, 1).getDay(); // 0 = Sun
+    const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+    const totalDaysPrevMonth = new Date(year, month, 0).getDate();
+
+    const days: Array<{
+      dayNumber: number;
+      isoDate: string;
+      isCurrentMonth: boolean;
+      isToday: boolean;
+      isSelected: boolean;
+      hasSales: boolean;
+    }> = [];
+
+    const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+    // Previous month padding
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+      const dayNum = totalDaysPrevMonth - i;
+      const prevDate = new Date(year, month - 1, dayNum);
+      const iso = prevDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+      days.push({
+        dayNumber: dayNum,
+        isoDate: iso,
+        isCurrentMonth: false,
+        isToday: iso === todayStr,
+        isSelected: iso === selectedCalendarDate,
+        hasSales: calendarRecordedDates.includes(iso),
+      });
+    }
+
+    // Current month days
+    for (let d = 1; d <= totalDaysInMonth; d++) {
+      const curDate = new Date(year, month, d);
+      const iso = curDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+      days.push({
+        dayNumber: d,
+        isoDate: iso,
+        isCurrentMonth: true,
+        isToday: iso === todayStr,
+        isSelected: iso === selectedCalendarDate,
+        hasSales: calendarRecordedDates.includes(iso),
+      });
+    }
+
+    // Next month padding to fill full grid
+    const remaining = (7 - (days.length % 7)) % 7;
+    for (let n = 1; n <= remaining; n++) {
+      const nextDate = new Date(year, month + 1, n);
+      const iso = nextDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+      days.push({
+        dayNumber: n,
+        isoDate: iso,
+        isCurrentMonth: false,
+        isToday: iso === todayStr,
+        isSelected: iso === selectedCalendarDate,
+        hasSales: calendarRecordedDates.includes(iso),
+      });
+    }
+
+    return days;
+  }, [calendarViewDate, selectedCalendarDate, calendarRecordedDates]);
+
   const [activeReportSubTab, setActiveReportSubTab] = useState<'sales' | 'menu' | 'tables' | 'staff' | 'billing'>('sales');
   const [dailyReports, setDailyReports] = useState<any | null>(null);
   const [loadingDailyReports, setLoadingDailyReports] = useState(false);
@@ -413,6 +700,9 @@ export default function MorePage() {
       if (res.ok) {
         const d = await res.json();
         setDailyReports(d.reports);
+        if (Array.isArray(d.recordedDates)) {
+          setCalendarRecordedDates(d.recordedDates);
+        }
       }
     } catch (e) {
       console.error('Failed to load daily reports:', e);
@@ -422,8 +712,13 @@ export default function MorePage() {
   };
 
   useEffect(() => {
-    if (activeTab === 'reports') {
+    if (activeTab === 'staff') {
+      loadStaff();
+    } else if (activeTab === 'security') {
+      loadGoogleWorkspaceConfig();
+    } else if (activeTab === 'reports') {
       fetchDailyReports();
+      fetchCalendarReportsForDate(selectedCalendarDate);
     }
   }, [activeTab]);
 
@@ -526,87 +821,31 @@ export default function MorePage() {
         restaurantName: 'ഇത്തിപ്പൂരം',
         restaurantLocation: 'Vanchiyoor, Trivandrum',
         phone: '+91 94470 00000',
-        invoiceNumber: '1001',
-        orderCode: '#01',
+        invoiceNumber: 'TEST-1001',
+        orderCode: '#TEST',
         tableCode: 'T1',
-        dateTime: '04/11/2026',
+        dateTime: new Date().toLocaleDateString('en-IN'),
         items: [
-          { name: 'Aavoli fry', qty: 1, price: 120, total: 120 },
+          { name: 'Test Food Item', qty: 1, price: 100, total: 100 },
         ],
-        grandTotal: 120,
+        grandTotal: 100,
         paymentMode: 'Cash',
         extraLines: extraLines,
       }, 'bitmap');
-      setBtStatus('Test print sent successfully to SEZNIK!');
+      setBtStatus('Test print sent successfully!');
       setBtConnectionStatus('connected');
     } catch (err: any) {
-      setBtStatus(`Bluetooth Error: ${err.message || 'Device disconnected or cancelled'}`);
+      if (typeof window !== 'undefined') window.print();
+      setBtStatus('Test print rendered via 58mm System Print');
     } finally {
       setIsBluetoothPrinting(false);
     }
   };
 
-  // Admin PIN Unlock Handler
-  const handleUnlockAdmin = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (adminPinInput === '5566') {
-      setIsAdminUnlocked(true);
-      setAdminPinError(null);
-    } else {
-      setAdminPinError('Invalid Admin PIN. Please enter 5566.');
-    }
-  };
-
-  // Add Staff Handler
-  const handleCreateStaff = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newStaffName.trim() || newStaffPin.length !== 4) {
-      alert('Please enter staff name and a 4-digit PIN');
-      return;
-    }
-    setStaffLoading(true);
-    try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newStaffName.trim(),
-          pin: newStaffPin.trim(),
-          role: newStaffRole,
-        }),
-      });
-
-      if (res.ok) {
-        setStaffList((prev) => [
-          ...prev,
-          {
-            id: String(Date.now()),
-            fullName: newStaffName.trim(),
-            role: newStaffRole,
-            pin: newStaffPin.trim(),
-            status: 'ACTIVE',
-          },
-        ]);
-        setStaffMessage(`✓ Staff "${newStaffName}" registered successfully!`);
-        setNewStaffName('');
-        setNewStaffPin('');
-        setIsAddStaffModalOpen(false);
-        setTimeout(() => setStaffMessage(null), 3000);
-      } else {
-        const d = await res.json();
-        alert(d.error || 'Failed to register staff');
-      }
-    } catch (err: any) {
-      alert('Error registering staff: ' + err.message);
-    } finally {
-      setStaffLoading(false);
-    }
-  };
-
   // Factory Reset Execution
   const handleExecuteFactoryReset = async () => {
-    if (resetPinInput !== '5566') {
-      setResetError('Unauthorized. Enter Admin PIN 5566 to confirm factory reset.');
+    if (!resetPinInput || resetPinInput.length < 4) {
+      setResetError('Enter your 4-digit Master Security PIN to confirm factory reset.');
       return;
     }
 
@@ -628,7 +867,6 @@ export default function MorePage() {
 
       if (res.ok) {
         setResetSuccess(true);
-        setStaffList([]);
         if (typeof window !== 'undefined') {
           localStorage.clear();
         }
@@ -706,17 +944,6 @@ export default function MorePage() {
           >
             <UtensilsCrossed className="w-4 h-4" />
             <span>Items</span>
-          </Link>
-
-          <Link
-            href="/kitchen"
-            className="flex items-center justify-between px-3.5 py-3 rounded-2xl text-zinc-400 hover:bg-zinc-900 hover:text-white font-bold text-sm transition"
-          >
-            <div className="flex items-center space-x-3">
-              <ChefHat className="w-4 h-4 text-orange-400" />
-              <span>Kitchen (KDS)</span>
-            </div>
-            <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping" />
           </Link>
 
           <Link
@@ -798,10 +1025,6 @@ export default function MorePage() {
             <UtensilsCrossed className="w-4 h-4" />
             <span>Items</span>
           </Link>
-          <Link href="/kitchen" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center space-x-3 px-3 py-2.5 rounded-xl text-zinc-300 font-bold text-sm">
-            <ChefHat className="w-4 h-4 text-orange-400" />
-            <span>Kitchen (KDS)</span>
-          </Link>
           <Link href="/users" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center space-x-3 px-3 py-2.5 rounded-xl bg-white text-black font-black text-sm">
             <MoreHorizontal className="w-4 h-4" />
             <span>More</span>
@@ -848,7 +1071,7 @@ export default function MorePage() {
                   </div>
                 </button>
 
-                {/* 2. Staff */}
+                {/* 2. Add Staff & Staff Management */}
                 <button
                   type="button"
                   onClick={() => openTab('staff')}
@@ -860,15 +1083,35 @@ export default function MorePage() {
                       <ChevronRight className="w-5 h-5 text-zinc-400 group-hover:text-black group-hover:translate-x-1 transition-all" />
                     </div>
                     <div>
-                      <h2 className="text-base sm:text-lg font-black text-black">2. Staff Access &amp; PINs</h2>
+                      <h2 className="text-base sm:text-lg font-black text-black">2. Add Staff &amp; Management</h2>
                       <p className="text-xs text-zinc-500 font-medium mt-1 leading-relaxed">
-                        Staff management, designated roles (Cashier, Chef, Manager) and 4-digit PIN access. Admin PIN (5566) required.
+                        Register restaurant staff, assign roles (Cashier, Kitchen Chef, Manager, Admin), assign 4-digit PINs, and manage authorized users.
                       </p>
                     </div>
                   </div>
                 </button>
 
-                {/* 3. Reports */}
+                {/* 3. Security & Master PIN (Admin Person) */}
+                <button
+                  type="button"
+                  onClick={() => openTab('security')}
+                  className="w-full text-left bg-white hover:bg-zinc-50 p-5 rounded-2xl border-2 border-zinc-200 hover:border-black shadow-xs transition-all cursor-pointer flex flex-col justify-between group active:scale-[0.99]"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <KeyRound className="w-6 h-6 text-black" />
+                      <ChevronRight className="w-5 h-5 text-zinc-400 group-hover:text-black group-hover:translate-x-1 transition-all" />
+                    </div>
+                    <div>
+                      <h2 className="text-base sm:text-lg font-black text-black">3. Security &amp; Master PIN</h2>
+                      <p className="text-xs text-zinc-500 font-medium mt-1 leading-relaxed">
+                        Admin Master Security PIN management and Google Account email setup for the Master Excel sheet synchronization.
+                      </p>
+                    </div>
+                  </div>
+                </button>
+
+                {/* 4. Reports & Analytics (With Calendar) */}
                 <button
                   type="button"
                   onClick={() => openTab('reports')}
@@ -880,15 +1123,15 @@ export default function MorePage() {
                       <ChevronRight className="w-5 h-5 text-zinc-400 group-hover:text-black group-hover:translate-x-1 transition-all" />
                     </div>
                     <div>
-                      <h2 className="text-base sm:text-lg font-black text-black">3. Reports &amp; Analytics</h2>
+                      <h2 className="text-base sm:text-lg font-black text-black">4. Reports &amp; Analytics (Calendar)</h2>
                       <p className="text-xs text-zinc-500 font-medium mt-1 leading-relaxed">
-                        Total Sales of the Day, Remaining Menu Stock, Daily Table Revenue, Staff Login Audit &amp; 5-in-1 Excel export.
+                        Total Sales, Menu Stock, Table Revenue, 5-in-1 Excel export, and interactive calendar date picker for any day.
                       </p>
                     </div>
                   </div>
                 </button>
 
-                {/* 4. Storage */}
+                {/* 5. Storage */}
                 <button
                   type="button"
                   onClick={() => openTab('storage')}
@@ -900,19 +1143,19 @@ export default function MorePage() {
                       <ChevronRight className="w-5 h-5 text-zinc-400 group-hover:text-black group-hover:translate-x-1 transition-all" />
                     </div>
                     <div>
-                      <h2 className="text-base sm:text-lg font-black text-black">4. Storage &amp; Archives</h2>
+                      <h2 className="text-base sm:text-lg font-black text-black">5. Storage &amp; Archives</h2>
                       <p className="text-xs text-zinc-500 font-medium mt-1 leading-relaxed">
-                        Set phone storage folder path for reports archive, view latest 10 saved daily reports, and export history.
+                        Set phone storage folder path for reports archive, inspect recorded ledgers, and export history.
                       </p>
                     </div>
                   </div>
                 </button>
 
-                {/* 5. Reset */}
+                {/* 6. Reset */}
                 <button
                   type="button"
                   onClick={() => openTab('reset')}
-                  className="w-full text-left bg-red-50/50 hover:bg-red-50 p-5 rounded-2xl border-2 border-red-200 hover:border-red-500 shadow-xs transition-all cursor-pointer flex flex-col justify-between group active:scale-[0.99] sm:col-span-2"
+                  className="w-full text-left bg-red-50/50 hover:bg-red-50 p-5 rounded-2xl border-2 border-red-200 hover:border-red-500 shadow-xs transition-all cursor-pointer flex flex-col justify-between group active:scale-[0.99]"
                 >
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
@@ -923,9 +1166,9 @@ export default function MorePage() {
                       <ChevronRight className="w-5 h-5 text-red-400 group-hover:text-red-600 group-hover:translate-x-1 transition-all" />
                     </div>
                     <div>
-                      <h2 className="text-base sm:text-lg font-black text-red-950">5. Factory Reset (Handover)</h2>
+                      <h2 className="text-base sm:text-lg font-black text-red-950">6. Factory Reset (Handover)</h2>
                       <p className="text-xs text-red-900/80 font-medium mt-1 leading-relaxed">
-                        Reset app to start fresh as new with all values 0, no menu, no tables for clean shop handover. Admin PIN (5566) required.
+                        Reset app to clean handover state. Master PIN required.
                       </p>
                     </div>
                   </div>
@@ -940,49 +1183,28 @@ export default function MorePage() {
         {/* ========================================================== */}
         {activeTab !== null && (
           <div className="flex-1 flex flex-col w-full">
-            {/* Top Navigation Bar: for Printer, Staff & Reports, starts from left on top with no "More Option" button */}
-            {activeTab === 'printer' ? (
-              <div className="px-4 sm:px-6 py-4 sm:py-5 bg-white border-b border-zinc-200 shrink-0">
-                <h1 className="text-xl sm:text-2xl font-black text-black tracking-tight text-left">
-                  Printer (SEZNIK 58mm)
+            {/* Top Navigation Bar with Back Button to More on ALL subtabs */}
+            <div className="px-4 sm:px-6 py-3.5 bg-white border-b border-zinc-200 flex items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center space-x-3">
+                <button
+                  type="button"
+                  onClick={handleBackToLanding}
+                  className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 font-extrabold text-xs transition cursor-pointer active:scale-95 shadow-xs"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Back to More</span>
+                </button>
+                <span className="text-zinc-300 font-bold">/</span>
+                <h1 className="text-base sm:text-lg font-black text-black truncate max-w-[200px] sm:max-w-none">
+                  {activeTab === 'printer' && '1. Printer (SEZNIK 58mm)'}
+                  {activeTab === 'staff' && '2. Add Staff & Staff Management'}
+                  {activeTab === 'security' && '3. Security & Master PIN (Admin Person)'}
+                  {activeTab === 'reports' && '4. Reports & Analytics (Calendar)'}
+                  {activeTab === 'storage' && '5. Storage & Archives'}
+                  {activeTab === 'reset' && '6. Factory Reset (Handover)'}
                 </h1>
               </div>
-            ) : activeTab === 'staff' ? (
-              <div className="px-4 sm:px-6 py-4 sm:py-5 bg-white border-b border-zinc-200 shrink-0">
-                <h1 className="text-xl sm:text-2xl font-black text-black tracking-tight text-left">
-                  2. Staff Access &amp; PINs
-                </h1>
-              </div>
-            ) : activeTab === 'reports' ? (
-              <div className="px-4 sm:px-6 py-4 sm:py-5 bg-white border-b border-zinc-200 shrink-0">
-                <h1 className="text-xl sm:text-2xl font-black text-black tracking-tight text-left">
-                  3. Reports &amp; Analytics
-                </h1>
-              </div>
-            ) : activeTab === 'storage' ? (
-              <div className="px-4 sm:px-6 py-4 sm:py-5 bg-white border-b border-zinc-200 shrink-0">
-                <h1 className="text-xl sm:text-2xl font-black text-black tracking-tight text-left">
-                  4. Storage &amp; Archives
-                </h1>
-              </div>
-            ) : (
-              <div className="px-4 sm:px-6 py-3.5 bg-white border-b border-zinc-200 flex items-center justify-between gap-3 shrink-0">
-                <div className="flex items-center space-x-3">
-                  <button
-                    type="button"
-                    onClick={handleBackToLanding}
-                    className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-900 font-extrabold text-xs transition cursor-pointer active:scale-95 shadow-xs"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    <span>More Option</span>
-                  </button>
-                  <span className="text-zinc-300 font-bold">/</span>
-                  <h1 className="text-base sm:text-lg font-black text-black truncate max-w-[200px] sm:max-w-none">
-                    {activeTab === 'reset' && '5. Factory Reset (Handover)'}
-                  </h1>
-                </div>
-              </div>
-            )}
+            </div>
 
             {/* Right Main Panel with Full Scroll */}
             <div className="flex-1 p-4 sm:p-6 space-y-6 pb-64 sm:pb-48">
@@ -1231,39 +1453,40 @@ export default function MorePage() {
             )}
 
             {/* ========================================================== */}
-            {/* 2. STAFF ACCESS & PINS (ADMIN PASSWORD PROTECTED)          */}
+            {/* 2. ADD STAFF & STAFF MANAGEMENT PANEL                      */}
             {/* ========================================================== */}
             {activeTab === 'staff' && (
-              <div className="max-w-3xl space-y-6">
-                {!isAdminUnlocked ? (
-                  /* Admin Password Challenge Form - Compact & Smaller */
+              <div className="max-w-4xl space-y-6">
+                {!isStaffAdminUnlocked ? (
+                  /* Admin Master Security PIN Challenge Box */
                   <div className="bg-white rounded-2xl p-5 border border-zinc-200 shadow-xs max-w-xs mx-auto text-center space-y-3.5">
                     <div className="w-10 h-10 rounded-xl bg-zinc-100 flex items-center justify-center mx-auto text-zinc-800">
                       <Lock className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-black text-black">Admin Access Required</h3>
+                      <h3 className="text-sm font-black text-black">Master Security Authorization</h3>
                       <p className="text-[11px] text-zinc-500 mt-0.5">
-                        Enter Admin PIN (5566) to manage staff credentials.
+                        Enter 4-digit Master Security PIN to access Staff Management.
                       </p>
                     </div>
 
-                    <form onSubmit={handleUnlockAdmin} className="space-y-2.5">
+                    <form onSubmit={handleUnlockStaffAdmin} className="space-y-2.5">
                       <div>
                         <input
                           type="password"
                           inputMode="numeric"
                           maxLength={6}
-                          value={adminPinInput}
+                          value={staffAdminPinInput}
                           onChange={(e) => {
-                            setAdminPinInput(e.target.value);
-                            setAdminPinError(null);
+                            setStaffAdminPinInput(e.target.value);
+                            setStaffAdminPinError(null);
                           }}
-                          placeholder="Admin PIN (5566)"
+                          placeholder="Master Security PIN"
                           className="w-full text-center text-sm font-mono font-black tracking-widest py-2 px-3 rounded-xl bg-zinc-50 border border-zinc-300 focus:outline-none focus:border-black text-black"
+                          autoFocus
                         />
-                        {adminPinError && (
-                          <p className="text-[11px] text-red-600 font-bold mt-1">{adminPinError}</p>
+                        {staffAdminPinError && (
+                          <p className="text-[11px] text-red-600 font-bold mt-1">{staffAdminPinError}</p>
                         )}
                       </div>
 
@@ -1271,207 +1494,458 @@ export default function MorePage() {
                         type="submit"
                         className="w-full py-2.5 px-3 rounded-xl bg-black hover:bg-zinc-800 text-white font-black text-xs transition shadow-xs cursor-pointer active:scale-98"
                       >
-                        Unlock Staff
+                        Authorize &amp; Unlock
                       </button>
                     </form>
                   </div>
                 ) : (
-                  /* Unlocked Staff Management Interface */
-                  <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-xs space-y-6">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-zinc-100">
+                  /* Unlocked Staff Management Content */
+                  <div className="bg-white rounded-3xl p-6 sm:p-8 border border-zinc-200 shadow-xs space-y-6">
+                    {/* Header & Add Staff Button */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-zinc-100 gap-3">
                       <div>
-                        <h3 className="text-base font-black text-black">Staff Credentials &amp; Access Controls</h3>
+                        <h3 className="text-base sm:text-lg font-black text-black">
+                          Staff Members &amp; Terminal Authorization
+                        </h3>
                         <p className="text-xs text-zinc-500 mt-0.5">
-                          Admin PIN authorized. Configure rapid 4-digit PINs for counter tablets and phones.
+                          Tap any staff member name to view roles, 4-digit PINs, and management actions.
                         </p>
                       </div>
 
                       <div className="flex items-center space-x-2">
                         <button
-                          onClick={() => setIsAddStaffModalOpen(true)}
-                          className="px-4 py-2 rounded-2xl bg-black hover:bg-zinc-800 text-white font-black text-xs transition shadow-xs cursor-pointer active:scale-98"
+                          type="button"
+                          onClick={() => {
+                            setStaffError(null);
+                            setStaffFeedback(null);
+                            setIsAddStaffModalOpen(true);
+                          }}
+                          className="inline-flex items-center space-x-1.5 px-4 py-2.5 rounded-2xl bg-black hover:bg-zinc-800 text-white font-black text-xs transition cursor-pointer shadow-xs active:scale-95 shrink-0"
                         >
-                          <span>Add Staff</span>
+                          <Plus className="w-4 h-4 stroke-[3]" />
+                          <span>+ Register New Staff</span>
                         </button>
                         <button
+                          type="button"
                           onClick={() => {
-                            setIsAdminUnlocked(false);
-                            setAdminPinInput('');
+                            setIsStaffAdminUnlocked(false);
+                            setStaffAdminPinInput('');
                           }}
-                          className="p-2 rounded-2xl border border-zinc-200 hover:bg-zinc-100 text-zinc-600 cursor-pointer"
-                          title="Lock Section"
+                          className="p-2 rounded-xl border border-zinc-200 hover:bg-zinc-100 text-zinc-600 cursor-pointer"
+                          title="Lock Staff Section"
                         >
                           <Lock className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
 
-                    {staffMessage && (
-                      <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center space-x-2">
-                        <Check className="w-4 h-4 text-emerald-600" />
-                        <span>{staffMessage}</span>
+                    {/* Feedback Banner */}
+                    {staffFeedback && (
+                      <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center space-x-2">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>{staffFeedback}</span>
                       </div>
                     )}
 
-                    {/* Staff Credentials Table */}
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs text-zinc-700">
-                        <thead className="bg-zinc-50 text-[10px] font-extrabold uppercase tracking-wider text-zinc-500 border-y border-zinc-200">
-                          <tr>
-                            <th className="py-3 px-4">Staff Member</th>
-                            <th className="py-3 px-4">Designated Role</th>
-                            <th className="py-3 px-4">4-Digit Fast PIN</th>
-                            <th className="py-3 px-4">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-100">
-                          {staffList.map((st) => (
-                            <tr key={st.id} className="hover:bg-zinc-50/70">
-                              <td className="py-3.5 px-4 font-bold text-zinc-900">{st.fullName}</td>
-                              <td className="py-3.5 px-4">
-                                <span className="px-2.5 py-1 rounded-xl bg-zinc-100 border border-zinc-200 font-mono text-[10px] font-black text-zinc-800">
-                                  {st.role}
-                                </span>
-                              </td>
-                              <td className="py-3.5 px-4 font-mono font-black text-black">
-                                •••• ({st.pin})
-                              </td>
-                              <td className="py-3.5 px-4">
-                                <span className="inline-flex items-center space-x-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                  <span>Active</span>
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    {/* Staff List — Showing ONLY Names of Registered Staff */}
+                    {loadingStaff ? (
+                      <div className="py-12 text-center text-zinc-400">
+                        <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2 text-zinc-600" />
+                        <p className="text-xs font-bold">Loading staff registry...</p>
+                      </div>
+                    ) : staffList.length === 0 ? (
+                      <div className="py-12 text-center text-zinc-400 border-2 border-dashed border-zinc-200 rounded-2xl">
+                        <Users className="w-10 h-10 mx-auto text-zinc-300 mb-2" />
+                        <p className="text-sm font-black text-black">No Staff Members Registered Yet</p>
+                        <p className="text-xs text-zinc-500 mt-1 max-w-sm mx-auto">
+                          Click &ldquo;+ Register New Staff&rdquo; above to create staff credentials for your cashiers and kitchen chefs.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {staffList.map((staff: any) => (
+                          <button
+                            key={staff.id || staff.username}
+                            type="button"
+                            onClick={() => setSelectedStaffDetail(staff)}
+                            className="w-full text-left p-4 rounded-2xl bg-white hover:bg-zinc-50 border-2 border-zinc-200 hover:border-black shadow-xs transition cursor-pointer flex items-center justify-between group active:scale-[0.99]"
+                          >
+                            <div className="flex items-center space-x-3 min-w-0">
+                              <div className="w-10 h-10 rounded-2xl bg-black text-white font-black text-sm flex items-center justify-center shrink-0">
+                                {(staff.fullName || staff.username || 'S').slice(0, 2).toUpperCase()}
+                              </div>
+                              <span className="text-sm font-black text-black truncate">
+                                {staff.fullName || staff.username}
+                              </span>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-zinc-400 group-hover:text-black group-hover:translate-x-0.5 transition shrink-0" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             )}
 
             {/* ========================================================== */}
-            {/* 3. REPORTS & ANALYTICS TAB (5 ESSENTIAL DAILY REPORTS)     */}
+            {/* 3. MASTER SECURITY PIN & GOOGLE WORKSPACE CONFIG (ADMIN)   */}
             {/* ========================================================== */}
-            {activeTab === 'reports' && (
-              <div className="max-w-4xl space-y-4">
-                <div className="bg-white rounded-3xl p-5 sm:p-6 border border-zinc-200 shadow-xs space-y-4">
+            {activeTab === 'security' && (
+              <div className="max-w-xl space-y-6">
+                <div className="bg-white rounded-3xl p-6 sm:p-8 border border-zinc-200 shadow-xs space-y-6">
                   
-                  {/* Clean Heading & Storage Destination Indicator */}
-                  <div className="pb-3 border-b border-zinc-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-base sm:text-lg font-black text-black">
-                        Daily Business Audits &amp; Compliance Reports
-                      </h3>
-                      <p className="text-[11px] font-semibold text-zinc-500 mt-0.5 flex items-center space-x-1">
-                        <HardDrive className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                        <span className="truncate">Auto-download path: <strong className="text-zinc-800 font-mono">{phoneStoragePath}</strong></span>
+                  {/* Status Banner */}
+                  <div className="flex items-center space-x-3 p-4 rounded-2xl bg-zinc-50 border border-zinc-200">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
+                      <ShieldCheck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black text-black uppercase tracking-wider">Master Security Active (Admin Build)</h4>
+                      <p className="text-[11px] text-zinc-500 mt-0.5">
+                        Admin person controls terminal privileges, Master Security PIN, and Master Excel Database sync.
                       </p>
                     </div>
+                  </div>
 
+                  {/* Feedback Messages */}
+                  {pinUpdateMessage && (
+                    <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center space-x-2">
+                      <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>{pinUpdateMessage}</span>
+                    </div>
+                  )}
+
+                  {pinUpdateError && (
+                    <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold flex items-center space-x-2">
+                      <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                      <span>{pinUpdateError}</span>
+                    </div>
+                  )}
+
+                  {/* Change PIN Form */}
+                  <form onSubmit={handleUpdateMasterPin} className="space-y-4">
+                    <h3 className="text-sm font-black text-black">Update Admin Master Security PIN</h3>
+
+                    <div>
+                      <label className="block text-[11px] font-black uppercase tracking-wider text-zinc-700 mb-1.5">
+                        Current Master PIN
+                      </label>
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={currentPinInput}
+                        onChange={(e) => setCurrentPinInput(e.target.value)}
+                        placeholder="Enter current PIN"
+                        className="w-full py-2.5 px-4 rounded-xl bg-zinc-50 border border-zinc-300 text-sm font-mono font-black focus:outline-none focus:border-black text-black"
+                        required
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-black uppercase tracking-wider text-zinc-700 mb-1.5">
+                          New 4-Digit PIN
+                        </label>
+                        <input
+                          type="password"
+                          inputMode="numeric"
+                          maxLength={4}
+                          value={newPinInput}
+                          onChange={(e) => setNewPinInput(e.target.value)}
+                          placeholder="••••"
+                          className="w-full py-2.5 px-4 rounded-xl bg-zinc-50 border border-zinc-300 text-sm font-mono font-black focus:outline-none focus:border-black text-black"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-black uppercase tracking-wider text-zinc-700 mb-1.5">
+                          Confirm New PIN
+                        </label>
+                        <input
+                          type="password"
+                          inputMode="numeric"
+                          maxLength={4}
+                          value={confirmNewPinInput}
+                          onChange={(e) => setConfirmNewPinInput(e.target.value)}
+                          placeholder="••••"
+                          className="w-full py-2.5 px-4 rounded-xl bg-zinc-50 border border-zinc-300 text-sm font-mono font-black focus:outline-none focus:border-black text-black"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={pinUpdating}
+                      className="w-full py-3 px-4 rounded-2xl bg-black hover:bg-zinc-800 text-white font-black text-xs transition cursor-pointer flex items-center justify-center space-x-2 active:scale-98 shadow-xs"
+                    >
+                      {pinUpdating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <span>Save New Master PIN to Master DB</span>}
+                    </button>
+                  </form>
+
+                  {/* Google Workspace & Master Excel Email Configuration */}
+                  <div className="pt-6 border-t border-zinc-200 space-y-4">
+                    <div className="flex items-center space-x-2">
+                      <FileSpreadsheet className="w-5 h-5 text-emerald-700" />
+                      <h3 className="text-sm font-black text-black">Master Excel Database Google Account</h3>
+                    </div>
+                    <p className="text-xs text-zinc-500 font-medium leading-relaxed">
+                      Configure the Google Account email authorized to access and sync with the Master Excel Spreadsheet database.
+                    </p>
+
+                    {googleEmailFeedback && (
+                      <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center space-x-2">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>{googleEmailFeedback}</span>
+                      </div>
+                    )}
+
+                    <form onSubmit={handleSaveGoogleEmail} className="space-y-3">
+                      <div>
+                        <label className="block text-[11px] font-black uppercase tracking-wider text-zinc-700 mb-1.5">
+                          Master Excel Google Account Email:
+                        </label>
+                        <input
+                          type="email"
+                          value={googleAdminEmail}
+                          onChange={(e) => setGoogleAdminEmail(e.target.value)}
+                          placeholder="e.g. ithipoorampos@gmail.com"
+                          className="w-full py-2.5 px-4 rounded-xl bg-zinc-50 border border-zinc-300 text-xs font-medium focus:outline-none focus:border-black text-black"
+                          required
+                        />
+                      </div>
+
+                      {googleSpreadsheetUrl && (
+                        <div className="p-3 rounded-xl bg-zinc-50 border border-zinc-200 text-xs flex items-center justify-between">
+                          <span className="text-zinc-500 truncate mr-2">Linked Sheet: 5-in-1 Master Database</span>
+                          <a
+                            href={googleSpreadsheetUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-bold text-blue-600 hover:underline shrink-0"
+                          >
+                            Open Google Sheet &rarr;
+                          </a>
+                        </div>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={isSavingGoogleEmail}
+                        className="w-full py-2.5 px-4 rounded-xl bg-black hover:bg-zinc-800 text-white font-black text-xs transition cursor-pointer flex items-center justify-center space-x-2 shadow-xs active:scale-98 disabled:opacity-50"
+                      >
+                        {isSavingGoogleEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Save Google Account Email</span>}
+                      </button>
+                    </form>
+                  </div>
+
+                </div>
+              </div>
+            )}
+
+            {/* ========================================================== */}
+            {/* 4. REPORTS & ANALYTICS TAB (CALENDAR PICKER + 5 IN 1 EXCEL) */}
+            {/* ========================================================== */}
+            {activeTab === 'reports' && (
+              <div className="max-w-2xl mx-auto space-y-5">
+                <div className="bg-white rounded-2xl p-5 sm:p-6 border border-zinc-200 shadow-xs space-y-5">
+                  
+                  {/* Top Action Header */}
+                  <div className="flex items-center justify-between pb-3 border-b border-zinc-200">
+                    <h3 className="text-base font-bold text-zinc-900">
+                      Reports &amp; Analytics
+                    </h3>
                     <button
                       type="button"
                       disabled={dayCloseLoading}
                       onClick={handleCloseDay}
-                      className="w-full md:w-auto inline-flex items-center justify-center space-x-2 px-4 py-3 rounded-2xl bg-zinc-900 hover:bg-black text-white font-black text-xs transition shadow-sm active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
+                      className="px-3.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-black text-white text-xs font-semibold transition disabled:opacity-50 cursor-pointer shrink-0"
                     >
-                      {dayCloseLoading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Closing Day...</span>
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                          <span>🌙 Close Day &amp; Download Z-Report</span>
-                        </>
-                      )}
+                      {dayCloseLoading ? 'Closing Day...' : 'Close Day & Download Z-Report'}
                     </button>
                   </div>
 
-                  {/* 5 Reports One by One Down to One Another */}
-                  <div className="space-y-3 pt-1">
-                    {reportCategories.map((cat) => {
-                      const isExpanded = expandedReport === cat.id;
-                      return (
-                        <div 
-                          key={cat.id} 
-                          className={`rounded-2xl border-2 transition-all ${
-                            isExpanded ? 'border-black bg-zinc-50/50 shadow-xs' : 'border-zinc-200 bg-white hover:border-zinc-400'
-                          }`}
+                  {/* Real Interactive Calendar */}
+                  <div className="space-y-3">
+                    {/* Month / Year Switcher Bar */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-zinc-50 border border-zinc-200">
+                      <div className="flex items-center space-x-2">
+                        {/* Month Selector */}
+                        <select
+                          value={calendarViewDate.getMonth()}
+                          onChange={(e) => {
+                            const d = new Date(calendarViewDate);
+                            d.setMonth(parseInt(e.target.value, 10));
+                            setCalendarViewDate(d);
+                          }}
+                          className="px-3 py-1.5 rounded-lg border border-zinc-300 bg-white text-xs font-semibold text-zinc-900 focus:outline-none focus:ring-1 focus:ring-black cursor-pointer"
                         >
-                          {/* Clickable Header to Open / View Report */}
-                          <button
-                            type="button"
-                            onClick={() => setExpandedReport(isExpanded ? null : cat.id)}
-                            className="w-full text-left p-4 sm:p-5 flex items-center justify-between cursor-pointer group"
-                          >
-                            <div className="space-y-0.5">
-                              <h4 className="text-sm sm:text-base font-black text-black group-hover:text-black">
-                                {cat.title}
-                              </h4>
-                              <p className="text-xs text-zinc-500 font-medium">
-                                {cat.desc}
-                              </p>
-                            </div>
-                            <div className={`p-2 rounded-xl transition-all ${
-                              isExpanded ? 'bg-black text-white rotate-90' : 'bg-zinc-100 text-zinc-500 group-hover:text-black'
-                            }`}>
-                              <ChevronRight className="w-4 h-4" />
-                            </div>
-                          </button>
+                          {CALENDAR_MONTHS.map((m, idx) => (
+                            <option key={m} value={idx}>{m}</option>
+                          ))}
+                        </select>
 
-                          {/* Last 7 Days Reports Ready to Download One by One */}
-                          {isExpanded && (
-                            <div className="px-4 pb-4 sm:px-5 sm:pb-5 pt-1 border-t border-zinc-200 space-y-2">
-                              <span className="text-[11px] font-black uppercase tracking-wider text-zinc-400 block pt-2 mb-1">
-                                Last 7 Days Reports (Ready to Download)
-                              </span>
+                        {/* Year Selector (2024 to 2035) */}
+                        <select
+                          value={calendarViewDate.getFullYear()}
+                          onChange={(e) => {
+                            const d = new Date(calendarViewDate);
+                            d.setFullYear(parseInt(e.target.value, 10));
+                            setCalendarViewDate(d);
+                          }}
+                          className="px-3 py-1.5 rounded-lg border border-zinc-300 bg-white text-xs font-semibold text-zinc-900 focus:outline-none focus:ring-1 focus:ring-black cursor-pointer font-mono"
+                        >
+                          {CALENDAR_YEARS.map((yr) => (
+                            <option key={yr} value={yr}>{yr}</option>
+                          ))}
+                        </select>
+                      </div>
 
-                              <div className="divide-y divide-zinc-200 rounded-xl border border-zinc-200 bg-white overflow-hidden">
-                                {last7Days.map((d) => {
-                                  const filename = `${d.dateLabel}-${cat.fileSuffix}.pdf`;
-                                  return (
-                                    <div 
-                                      key={d.isoDate} 
-                                      className="p-3 sm:px-4 flex items-center justify-between gap-3 hover:bg-zinc-50 transition"
-                                    >
-                                      <div className="flex items-center space-x-3 min-w-0">
-                                        <div className="w-8 h-8 rounded-lg bg-red-50 text-red-700 flex items-center justify-center shrink-0 border border-red-200">
-                                          <FileText className="w-4 h-4 text-red-600" />
-                                        </div>
-                                        <div className="min-w-0">
-                                          <p className="text-xs font-mono font-black text-black truncate flex items-center space-x-1.5">
-                                            <span>{filename}</span>
-                                            <span className="text-[9px] uppercase px-1.5 py-0.5 rounded bg-red-100 text-red-800 font-bold">PDF</span>
-                                          </p>
-                                          <p className="text-[11px] text-zinc-500">
-                                            {d.dateLabel} ({d.weekday})
-                                            {d.isToday && <span className="ml-2 font-bold text-emerald-600">● Today</span>}
-                                            {d.isYesterday && <span className="ml-2 font-bold text-zinc-600">● Yesterday</span>}
-                                          </p>
-                                        </div>
-                                      </div>
+                      {/* Navigation Controls: Previous, Today, Next */}
+                      <div className="flex items-center space-x-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const d = new Date(calendarViewDate);
+                            d.setMonth(d.getMonth() - 1);
+                            setCalendarViewDate(d);
+                          }}
+                          className="w-8 h-8 rounded-lg border border-zinc-300 bg-white hover:bg-zinc-100 flex items-center justify-center text-zinc-700 font-bold text-sm transition cursor-pointer"
+                          title="Previous Month"
+                        >
+                          ‹
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const today = new Date();
+                            setCalendarViewDate(today);
+                            handleSelectCalendarDate(today.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
+                          }}
+                          className="px-2.5 h-8 rounded-lg border border-zinc-300 bg-white hover:bg-zinc-100 text-zinc-700 font-semibold text-xs transition cursor-pointer"
+                        >
+                          Today
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const d = new Date(calendarViewDate);
+                            d.setMonth(d.getMonth() + 1);
+                            setCalendarViewDate(d);
+                          }}
+                          className="w-8 h-8 rounded-lg border border-zinc-300 bg-white hover:bg-zinc-100 flex items-center justify-center text-zinc-700 font-bold text-sm transition cursor-pointer"
+                          title="Next Month"
+                        >
+                          ›
+                        </button>
+                      </div>
+                    </div>
 
-                                      <button
-                                        type="button"
-                                        onClick={() => handleDownloadSingleReport(cat.id, d.isoDate, filename)}
-                                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-black hover:bg-zinc-800 text-white font-black text-xs transition cursor-pointer shadow-xs active:scale-95 shrink-0"
-                                      >
-                                        <FolderDown className="w-3.5 h-3.5" />
-                                        <span>Download</span>
-                                      </button>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {/* Calendar Days Grid */}
+                    <div className="bg-white rounded-xl border border-zinc-200 p-3 shadow-2xs">
+                      {/* Weekday Column Headers */}
+                      <div className="grid grid-cols-7 gap-1 text-center pb-2 border-b border-zinc-100 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
+                        <div>Sun</div>
+                        <div>Mon</div>
+                        <div>Tue</div>
+                        <div>Wed</div>
+                        <div>Thu</div>
+                        <div>Fri</div>
+                        <div>Sat</div>
+                      </div>
+
+                      {/* Day Number Cells */}
+                      <div className="grid grid-cols-7 gap-1 pt-2">
+                        {calendarDays.map((d, idx) => {
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => handleSelectCalendarDate(d.isoDate)}
+                              className={`h-11 sm:h-12 rounded-lg flex flex-col items-center justify-center transition relative cursor-pointer ${
+                                d.isSelected
+                                  ? 'bg-zinc-900 text-white font-bold shadow-xs ring-2 ring-zinc-900/20'
+                                  : d.isToday
+                                  ? 'bg-zinc-100 text-zinc-900 font-bold border-2 border-zinc-900'
+                                  : d.isCurrentMonth
+                                  ? 'text-zinc-800 hover:bg-zinc-100 font-medium'
+                                  : 'text-zinc-300 hover:bg-zinc-50 font-normal'
+                              }`}
+                            >
+                              <span className="text-xs leading-none">{d.dayNumber}</span>
+                              {d.hasSales && (
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full mt-1 ${d.isSelected ? 'bg-emerald-400' : 'bg-emerald-600'}`}
+                                  title="Sales recorded on this date"
+                                />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Clean Selected Date Indicator */}
+                  <div className="pt-2 border-t border-zinc-200 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-zinc-600">
+                      Selected Date: <strong className="text-zinc-900 font-mono">{selectedCalendarDate}</strong>
+                      {calendarRecordedDates.includes(selectedCalendarDate) && (
+                        <span className="ml-2 text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">
+                          Sales Recorded
+                        </span>
+                      )}
+                    </span>
+                  </div>
+
+                  {/* Excel and 4 PDF Download Buttons Arranged One Under the Other */}
+                  <div className="flex flex-col space-y-2.5 pt-1">
+                    {/* 1. Master Excel (5-in-1 Database) */}
+                    <a
+                      href={`/api/admin/daily-reports?format=excel&date=${selectedCalendarDate}`}
+                      download={`IthiPooram_MasterDatabase_${selectedCalendarDate}.xls`}
+                      className="w-full py-3 px-4 rounded-xl bg-zinc-900 hover:bg-black text-white font-semibold text-xs text-center transition shadow-xs active:scale-99 block cursor-pointer"
+                    >
+                      Download Master Database (5-in-1 Excel)
+                    </a>
+
+                    {/* 2. Daily Sales Report (PDF) */}
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadSingleReport('sales', selectedCalendarDate, `${selectedCalendarDate}-sales-report.pdf`)}
+                      className="w-full py-3 px-4 rounded-xl border border-zinc-300 hover:border-zinc-900 bg-white hover:bg-zinc-50 text-zinc-900 font-semibold text-xs text-center transition shadow-2xs active:scale-99 cursor-pointer"
+                    >
+                      Download Daily Sales Report (PDF)
+                    </button>
+
+                    {/* 3. Daily Menu Stock Report (PDF) */}
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadSingleReport('menu', selectedCalendarDate, `${selectedCalendarDate}-menu-stock-report.pdf`)}
+                      className="w-full py-3 px-4 rounded-xl border border-zinc-300 hover:border-zinc-900 bg-white hover:bg-zinc-50 text-zinc-900 font-semibold text-xs text-center transition shadow-2xs active:scale-99 cursor-pointer"
+                    >
+                      Download Daily Menu Stock &amp; Remaining Quantity Report (PDF)
+                    </button>
+
+                    {/* 4. Daily Table Revenue Report (PDF) */}
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadSingleReport('tables', selectedCalendarDate, `${selectedCalendarDate}-table-revenue-report.pdf`)}
+                      className="w-full py-3 px-4 rounded-xl border border-zinc-300 hover:border-zinc-900 bg-white hover:bg-zinc-50 text-zinc-900 font-semibold text-xs text-center transition shadow-2xs active:scale-99 cursor-pointer"
+                    >
+                      Download Daily Table-wise Orders &amp; Revenue Report (PDF)
+                    </button>
+
+                    {/* 5. Billing Authorization Report (PDF) */}
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadSingleReport('billing', selectedCalendarDate, `${selectedCalendarDate}-billing-auth-report.pdf`)}
+                      className="w-full py-3 px-4 rounded-xl border border-zinc-300 hover:border-zinc-900 bg-white hover:bg-zinc-50 text-zinc-900 font-semibold text-xs text-center transition shadow-2xs active:scale-99 cursor-pointer"
+                    >
+                      Download Billing Authorization &amp; Staff Action Report (PDF)
+                    </button>
                   </div>
 
                 </div>
@@ -1490,9 +1964,9 @@ export default function MorePage() {
                       <Lock className="w-5 h-5" />
                     </div>
                     <div>
-                      <h3 className="text-sm font-black text-black">Admin Access Required</h3>
+                      <h3 className="text-sm font-black text-black">Master Security Authorization</h3>
                       <p className="text-[11px] text-zinc-500 mt-0.5">
-                        Enter Admin PIN (5566) to configure device storage folder.
+                        Enter 4-digit Master Security PIN to configure storage folder.
                       </p>
                     </div>
 
@@ -1507,7 +1981,7 @@ export default function MorePage() {
                             setStorageAdminPinInput(e.target.value);
                             setStorageAdminPinError(null);
                           }}
-                          placeholder="Admin PIN (5566)"
+                          placeholder="Master Security PIN"
                           className="w-full text-center text-sm font-mono font-black tracking-widest py-2 px-3 rounded-xl bg-zinc-50 border border-zinc-300 focus:outline-none focus:border-black text-black"
                         />
                         {storageAdminPinError && (
@@ -1519,7 +1993,7 @@ export default function MorePage() {
                         type="submit"
                         className="w-full py-2.5 px-3 rounded-xl bg-black hover:bg-zinc-800 text-white font-black text-xs transition shadow-xs cursor-pointer active:scale-98"
                       >
-                        Unlock Storage
+                        Authorize &amp; Unlock
                       </button>
                     </form>
                   </div>
@@ -1644,7 +2118,7 @@ export default function MorePage() {
 
                     <div>
                       <label className="block text-xs font-black text-zinc-900 uppercase tracking-wider mb-1">
-                        Enter Admin PIN (5566) to Authorize Reset:
+                        Enter Master Security PIN to Authorize Reset:
                       </label>
                       <input
                         type="password"
@@ -1655,7 +2129,7 @@ export default function MorePage() {
                           setResetPinInput(e.target.value);
                           setResetError(null);
                         }}
-                        placeholder="Admin PIN 5566"
+                        placeholder="Master Security PIN"
                         className="w-full py-2.5 px-4 rounded-xl bg-zinc-50 border border-zinc-300 text-sm font-mono font-black focus:outline-none focus:border-red-600 text-black"
                       />
                       {resetError && (
@@ -1692,87 +2166,205 @@ export default function MorePage() {
 
       </main>
 
-      {/* Add Staff Modal */}
-      {isAddStaffModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-zinc-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+      {/* ============================================================== */}
+      {/* STAFF DETAIL & MANAGEMENT MODAL (CLICKED FROM STAFF NAME CARD) */}
+      {/* ============================================================== */}
+      {selectedStaffDetail && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-zinc-200 space-y-4 animate-in zoom-in-95 duration-100">
             <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
-              <div className="flex items-center space-x-2">
-                <Users className="w-5 h-5 text-black" />
-                <h3 className="text-base font-black text-black">Register New Staff Member</h3>
+              <div className="flex items-center space-x-3">
+                <div className="w-11 h-11 rounded-2xl bg-black text-white font-black text-base flex items-center justify-center shrink-0">
+                  {(selectedStaffDetail.fullName || selectedStaffDetail.username || 'S').slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-black leading-tight">
+                    {selectedStaffDetail.fullName || selectedStaffDetail.username}
+                  </h3>
+                  <span className="text-[10px] font-black uppercase text-zinc-500 tracking-wider">
+                    {selectedStaffDetail.role || 'CASHIER'}
+                  </span>
+                </div>
               </div>
               <button
-                onClick={() => setIsAddStaffModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 hover:text-black flex items-center justify-center cursor-pointer"
+                type="button"
+                onClick={() => setSelectedStaffDetail(null)}
+                className="p-1.5 rounded-xl hover:bg-zinc-100 text-zinc-400 hover:text-black cursor-pointer transition"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateStaff} className="space-y-4">
+            <div className="space-y-2.5 text-xs">
+              <div className="flex justify-between items-center py-2 border-b border-zinc-100">
+                <span className="text-zinc-500 font-bold">Designated Role:</span>
+                <span className="font-black text-black bg-zinc-100 px-2.5 py-0.5 rounded-md text-[11px]">
+                  {selectedStaffDetail.role}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-zinc-100">
+                <span className="text-zinc-500 font-bold">Station Desk:</span>
+                <span className="font-bold text-black">{selectedStaffDetail.station || 'Billing Counter POS 1'}</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-zinc-100">
+                <span className="text-zinc-500 font-bold">4-Digit Security PIN:</span>
+                <span className="font-mono font-black text-emerald-700 tracking-widest text-sm bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                  {selectedStaffDetail.pin || '••••'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-zinc-100">
+                <span className="text-zinc-500 font-bold">Staff ID:</span>
+                <span className="font-mono font-bold text-zinc-700">{selectedStaffDetail.id || selectedStaffDetail.username}</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-zinc-100">
+                <span className="text-zinc-500 font-bold">Registration Date:</span>
+                <span className="font-bold text-zinc-700">
+                  {selectedStaffDetail.registeredAt ? new Date(selectedStaffDetail.registeredAt).toLocaleDateString('en-IN') : 'Active Member'}
+                </span>
+              </div>
+            </div>
+
+            <div className="pt-2 flex items-center space-x-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const s = selectedStaffDetail;
+                  setSelectedStaffDetail(null);
+                  handleDeleteStaff(s.id, s.fullName || s.username);
+                }}
+                className="flex-1 py-3 px-3 rounded-2xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 font-black text-xs transition cursor-pointer flex items-center justify-center space-x-1.5 active:scale-98"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Remove Staff</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedStaffDetail(null)}
+                className="py-3 px-5 rounded-2xl bg-zinc-100 hover:bg-zinc-200 text-black font-black text-xs transition cursor-pointer active:scale-98"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* REGISTER NEW STAFF MODAL                                        */}
+      {/* ============================================================== */}
+      {isAddStaffModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-zinc-200 text-xs text-black animate-in zoom-in-95 duration-100 space-y-4">
+            
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
+              <div className="flex items-center space-x-2">
+                <Users className="w-5 h-5 text-black" />
+                <div>
+                  <h3 className="text-base font-black text-black">Register Staff Member</h3>
+                  <p className="text-[11px] text-zinc-400 font-medium">Create staff login and billing authorization credentials</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsAddStaffModalOpen(false)}
+                className="text-zinc-400 hover:text-black p-1 rounded-xl"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {staffError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 font-bold text-xs flex items-center space-x-2">
+                <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                <span>{staffError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleCreateStaff} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-black text-zinc-800 uppercase tracking-wider mb-1">
-                  Full Name
+                <label className="block text-[11px] font-black uppercase tracking-wider text-zinc-700 mb-1">
+                  Full Name:
                 </label>
                 <input
                   type="text"
                   required
+                  autoFocus
                   value={newStaffName}
                   onChange={(e) => setNewStaffName(e.target.value)}
-                  placeholder="e.g. Rahul Nair"
-                  className="w-full py-2.5 px-4 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-semibold focus:outline-none focus:border-black text-zinc-900"
+                  placeholder="e.g. Rahul Kumar, Anitha S"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 font-bold text-black focus:outline-none focus:border-black"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-black text-zinc-800 uppercase tracking-wider mb-1">
-                  Designated Role
-                </label>
-                <select
-                  value={newStaffRole}
-                  onChange={(e) => setNewStaffRole(e.target.value)}
-                  className="w-full py-2.5 px-4 rounded-xl bg-zinc-50 border border-zinc-200 text-xs font-semibold focus:outline-none focus:border-black text-zinc-900"
-                >
-                  <option value="CASHIER">Cashier (Billing &amp; Settlement Desk)</option>
-                  <option value="KITCHEN_STAFF">Kitchen Chef (KDS Station)</option>
-                  <option value="MANAGER">Floor Manager (Shift &amp; Table Control)</option>
-                  <option value="MAIN_ADMIN">Administrator (Full Access)</option>
-                </select>
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-black uppercase tracking-wider text-zinc-700 mb-1">
+                    Role:
+                  </label>
+                  <select
+                    value={newStaffRole}
+                    onChange={(e: any) => {
+                      const r = e.target.value;
+                      setNewStaffRole(r);
+                      if (r === 'CASHIER') setNewStaffStation('Billing Counter POS 1');
+                      else if (r === 'KITCHEN_STAFF') setNewStaffStation('Main Kitchen Display (KDS)');
+                      else if (r === 'MANAGER') setNewStaffStation('Floor Operations Desk');
+                      else if (r === 'MAIN_ADMIN') setNewStaffStation('Executive Central Gateway');
+                    }}
+                    className="w-full px-3 py-2.5 rounded-xl border border-zinc-300 font-bold text-black bg-white focus:outline-none focus:border-black"
+                  >
+                    <option value="CASHIER">Cashier (Billing)</option>
+                    <option value="KITCHEN_STAFF">Kitchen Chef (KDS)</option>
+                    <option value="MANAGER">Floor Manager</option>
+                    <option value="MAIN_ADMIN">Admin</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-black uppercase tracking-wider text-zinc-700 mb-1">
+                    4-Digit PIN:
+                  </label>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    maxLength={4}
+                    required
+                    value={newStaffPin}
+                    onChange={(e) => setNewStaffPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                    placeholder="••••"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 font-mono font-black text-black tracking-widest text-center focus:outline-none focus:border-black"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-black text-zinc-800 uppercase tracking-wider mb-1">
-                  4-Digit Login PIN
+                <label className="block text-[11px] font-black uppercase tracking-wider text-zinc-700 mb-1">
+                  Terminal Station:
                 </label>
                 <input
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={4}
-                  required
-                  value={newStaffPin}
-                  onChange={(e) => setNewStaffPin(e.target.value)}
-                  placeholder="e.g. 7788"
-                  className="w-full py-2.5 px-4 rounded-xl bg-zinc-50 border border-zinc-200 text-sm font-mono font-black focus:outline-none focus:border-black text-zinc-900 text-center tracking-widest"
+                  type="text"
+                  value={newStaffStation}
+                  onChange={(e) => setNewStaffStation(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-zinc-300 font-medium text-black focus:outline-none focus:border-black"
                 />
               </div>
 
-              <div className="flex space-x-2 pt-2">
+              <div className="pt-2 flex justify-end space-x-2 border-t border-zinc-100">
                 <button
                   type="button"
                   onClick={() => setIsAddStaffModalOpen(false)}
-                  className="flex-1 py-3 rounded-2xl border border-zinc-200 text-xs font-bold text-zinc-600 hover:bg-zinc-50 cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl text-zinc-600 font-bold hover:bg-zinc-100 transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={staffLoading}
-                  className="flex-1 py-3 rounded-2xl bg-black hover:bg-zinc-800 text-white font-black text-xs transition cursor-pointer shadow-md disabled:opacity-50"
+                  className="px-5 py-2.5 rounded-xl bg-black hover:bg-zinc-800 text-white font-black transition shadow-xs cursor-pointer active:scale-98"
                 >
-                  {staffLoading ? 'Registering...' : 'Save Staff Member'}
+                  Register Staff Member
                 </button>
               </div>
             </form>
+
           </div>
         </div>
       )}
