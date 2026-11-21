@@ -558,7 +558,7 @@ function CustomerOrderingContent() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-stone-900 font-sans pb-28">
+    <div className="flex-1 w-full min-h-screen bg-[#FAF7F2] text-stone-900 font-sans pb-36">
       {/* Top Brand Notification Header */}
       <header className="bg-white border-b border-stone-200 sticky top-0 z-30 shadow-2xs">
         <div className="max-w-xl mx-auto px-4 py-3 flex items-center justify-between relative">
@@ -749,7 +749,7 @@ function CustomerOrderingContent() {
 
       {/* VIEW 2: MENU BROWSING SCREEN */}
       {currentView === 'menu' && (
-        <div>
+        <div className="w-full bg-[#FAF7F2] min-h-screen">
           {/* Menu Navigation & Search Subheader */}
           <div className="bg-white border-b border-stone-200 sticky top-[57px] z-20 shadow-xs">
             <div className="max-w-xl mx-auto px-4 py-2 space-y-2">
@@ -813,7 +813,7 @@ function CustomerOrderingContent() {
           </div>
 
           {/* Dishes List */}
-          <main className="max-w-xl mx-auto px-4 pt-4 pb-40 space-y-3">
+          <main className="max-w-xl mx-auto px-4 pt-4 pb-48 space-y-3 bg-[#FAF7F2]">
             {allMenuItems.length === 0 ? (
               <div className="text-center py-16 bg-white rounded-3xl border-2 border-dashed border-stone-200 p-8 shadow-xs">
                 <Utensils className="w-12 h-12 text-[#9E341D] mx-auto mb-3 opacity-60" />
@@ -1361,7 +1361,7 @@ function CustomerOrderingContent() {
 export default function CustomerMobileQrPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-[#FAF7F2] flex flex-col items-center justify-center">
+      <div className="flex-1 w-full min-h-screen bg-[#FAF7F2] flex flex-col items-center justify-center">
         <div className="w-8 h-8 border-3 border-[#9E341D] border-t-transparent rounded-full animate-spin mb-2" />
         <p className="text-xs font-bold text-stone-600">Loading Ithi Pooram Menu...</p>
       </div>

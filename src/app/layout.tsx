@@ -32,7 +32,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: 'cover',
-  themeColor: '#0C0E12',
+  themeColor: '#FAF7F2',
 };
 
 export default function RootLayout({
@@ -41,13 +41,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${manrope.variable} h-full`}>
+    <html lang="en" className={`${manrope.variable} min-h-screen bg-[#FAF7F2]`}>
       <head>
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
-      <body className={`${manrope.className} h-full flex flex-col font-sans bg-[#0C0E12] text-stone-100 antialiased selection:bg-zinc-800 selection:text-white pb-16 md:pb-0`}>
+      <body className={`${manrope.className} min-h-screen flex flex-col font-sans bg-[#FAF7F2] text-stone-900 antialiased selection:bg-zinc-800 selection:text-white`}>
         {children}
         <ScreenLockGuard />
         <MobileBottomNav />
