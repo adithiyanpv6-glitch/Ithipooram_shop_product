@@ -118,9 +118,9 @@ $shortcutPath = "C:\Users\USR\Desktop\B-41 - Shortcut.lnk"
 $hasShortcut = Test-Path $shortcutPath
 Check-Result "Desktop Printer Icon Shortcut Exists" $hasShortcut "Path: $shortcutPath"
 
-$reconnectBat = "C:\Users\USR\Desktop\RECONNECT_PRINTER.bat"
+$reconnectBat = "scripts\RECONNECT_PRINTER.bat"
 $hasReconnectBat = Test-Path $reconnectBat
-Check-Result "Desktop 1-Click Auto-Reconnect Script Exists" $hasReconnectBat "Path: $reconnectBat"
+Check-Result "1-Click Auto-Reconnect Script Exists" $hasReconnectBat "Path: $reconnectBat"
 
 # 5. BRANDING & ASSETS
 Write-Host "`n--- 5. BRANDING ASSETS & MALAYALAM CALLIGRAPHY ---" -ForegroundColor Cyan
