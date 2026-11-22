@@ -232,7 +232,7 @@ if (!global.__ITHIPOORAM_DB__) {
 
 const DB_FILE_PATH = path.join(process.cwd(), 'data', 'restaurant_store.json');
 const BACKUP_FILE_PATH = path.join(process.cwd(), 'data', 'restaurant_store.bak');
-const LEDGER_DIR = path.join(process.cwd(), 'data', 'daily_ledgers');
+export const LEDGER_DIR = path.join(process.cwd(), 'data', 'daily_ledgers');
 
 // Helper to get local date in Indian Standard Time (IST - Asia/Kolkata: YYYY-MM-DD)
 export function getIstDateString(d: Date | string = new Date()): string {
@@ -504,15 +504,37 @@ export function loadDbFromDisk() {
       }
     }
 
-    // Always synchronize and merge historicalSales with immutable daily ledgers on disk
-    const allDiskLedgers = readAllDailyLedgers();
-    const existingCodes = new Set((db.historicalSales || []).map((s) => s.invoiceNumber || s.orderCode || s.id));
-    for (const dItem of allDiskLedgers) {
-      const code = dItem.invoiceNumber || dItem.orderCode || dItem.id;
-      if (code && !existingCodes.has(code)) {
-        existingCodes.add(code);
-        db.historicalSales.push(dItem);
+    // Always synchronize and reconcile historicalSales with immutable daily ledgers on disk
+    if (fs.existsSync(LEDGER_DIR)) {
+      const ledgerFiles = fs.readdirSync(LEDGER_DIR).filter((f) => f.endsWith('.json'));
+      const ledgerDates = new Set(ledgerFiles.map((f) => f.replace('.json', '')));
+      
+      // Keep sales from dates that do not have their own daily ledger file
+      const nonLedgerSales = (db.historicalSales || []).filter((s) => {
+        const d = normalizeToIsoDate(s.settledAt || (s as any).paidAt);
+        return !ledgerDates.has(d);
+      });
+
+      // Daily ledgers on disk are the authoritative source of truth for their respective dates
+      const allDiskLedgers = readAllDailyLedgers();
+      const codeMap = new Map<string, any>();
+      for (const dItem of allDiskLedgers) {
+        const code = dItem.invoiceNumber || dItem.orderCode || dItem.id;
+        if (code && !codeMap.has(code)) {
+          codeMap.set(code, dItem);
+        }
       }
+      for (const s of nonLedgerSales) {
+        const code = s.invoiceNumber || s.orderCode || s.id;
+        if (code && !codeMap.has(code)) {
+          codeMap.set(code, s);
+        }
+      }
+      db.historicalSales = Array.from(codeMap.values()).sort((a, b) => {
+        const timeA = new Date(a.settledAt || 0).getTime();
+        const timeB = new Date(b.settledAt || 0).getTime();
+        return timeB - timeA;
+      });
     }
     if (db.historicalSales.length > 0) {
       console.log(`[Database Engine] Synchronized ${db.historicalSales.length} historical sales from permanent daily ledgers.`);
@@ -580,6 +602,20 @@ export function checkAndPerformDailyReset() {
       t.unpaidTotalPaise = 0;
       t.roomName = t.roomName || 'Dining Area';
     });
+
+    // PERMANENT MENU & ZERO DAILY PENDING STOCK ON DAY START:
+    // Menu item names, categories, prices, and stations stay permanently as such.
+    // Daily pending stock resets to 0 automatically so fresh stock is entered daily by shopkeeper.
+    if (Array.isArray(db.menuCategories)) {
+      for (const cat of db.menuCategories) {
+        if (!Array.isArray(cat.items)) continue;
+        for (const item of cat.items) {
+          item.currentStock = 0;
+          item.isAvailable = false;
+        }
+      }
+    }
+
     persistDb();
   }
 }

@@ -330,7 +330,7 @@ export function generateUnifiedMasterDatabaseXml(
     }
   }
 
-  // Preserve history: Include dishes that were sold even if deleted from current menu!
+  // Preserve history: Include dishes that were sold even if not in live menu categories
   salesList.forEach((s) => {
     if (Array.isArray(s.items)) {
       s.items.forEach((it: any) => {
@@ -338,11 +338,12 @@ export function generateUnifiedMasterDatabaseXml(
         const lowerName = dName.toLowerCase();
         if (dName && !seenDishNames.has(lowerName)) {
           seenDishNames.add(lowerName);
+          const matchedCat = menuCategories.find(c => (c.items || []).some((item: any) => item.name?.trim().toLowerCase() === lowerName));
           allDishes.push({
             id: it.itemId || `dish-archived-${allDishes.length + 1}`,
             name: dName,
             malayalamName: it.itemMalayalamName || '',
-            categoryName: 'Daily Delicacies',
+            categoryName: matchedCat?.name || (it.categoryName || it.category || 'Dishes'),
             pricePaise: it.pricePaise || 0,
             isAvailable: false,
             currentStock: 0,
@@ -501,9 +502,11 @@ export function generateUnifiedMasterDatabaseXml(
   </Worksheet>`;
 
   // ==========================================================================
-  // SHEET 2: Menu update of each day (Active dynamic columns + sold quantities)
+  // SHEET 2: Menu update of each day (Date-Wise Segregated Menu & Stock History)
   // ==========================================================================
   let sheet2RowsXml = '';
+  let allDatesMenuRevenuePaise = 0;
+
   if (allDishes.length === 0) {
     sheet2RowsXml = `
     <Row ss:Height="24">
@@ -512,43 +515,65 @@ export function generateUnifiedMasterDatabaseXml(
       </Cell>
     </Row>`;
   } else {
-    allDishes.forEach((dish, idx) => {
-      // Calculate sold quantity for this dish from today's active & historical sales
-      let soldQty = 0;
-      let revenuePaise = 0;
-      salesList.forEach((s) => {
-        if (Array.isArray(s.items)) {
-          s.items.forEach((it: any) => {
-            const name = (it.itemName || it.name || '').trim().toLowerCase();
-            if (name === (dish.name || '').trim().toLowerCase() || it.itemId === dish.id) {
-              const q = Number(it.quantity || it.qty || 1);
-              soldQty += q;
-              revenuePaise += Number(it.lineTotalPaise || ((dish.pricePaise || 0) * q));
+    // Collect all distinct dates from sales and current business date (newest first)
+    const menuDates = Array.from(new Set([businessDate, ...sortedDates])).filter(Boolean).sort().reverse();
+
+    menuDates.forEach((dStr) => {
+      const dInfo = getIstDayAndDateString(dStr);
+      const daySales = salesByDate[dStr] || [];
+      let dayTotalDishesSold = 0;
+      let dayTotalRevenuePaise = 0;
+
+      let dateDishesXml = '';
+      allDishes.forEach((dish, idx) => {
+        // Calculate sold count and revenue specifically for this date
+        let soldQty = 0;
+        let revenuePaise = 0;
+
+        daySales.forEach((s) => {
+          if (Array.isArray(s.items)) {
+            s.items.forEach((it: any) => {
+              const name = (it.itemName || it.name || '').trim().toLowerCase();
+              if (name === (dish.name || '').trim().toLowerCase() || it.itemId === dish.id) {
+                const q = Number(it.quantity || it.qty || 1);
+                soldQty += q;
+                revenuePaise += Number(it.lineTotalPaise || ((dish.pricePaise || 0) * q));
+              }
+            });
+          }
+        });
+
+        // Also include active unpaid orders currently being prepared if today
+        if (dStr === businessDate) {
+          (db.orders || []).forEach((o) => {
+            if (Array.isArray(o.items)) {
+              o.items.forEach((it) => {
+                const name = (it.itemName || '').trim().toLowerCase();
+                if (name === (dish.name || '').trim().toLowerCase() || it.itemId === dish.id) {
+                  const q = Number(it.quantity || 1);
+                  soldQty += q;
+                  revenuePaise += Number(it.lineTotalPaise || ((dish.pricePaise || 0) * q));
+                }
+              });
             }
           });
         }
-      });
 
-      // Also include active unpaid orders currently being prepared
-      (db.orders || []).forEach((o) => {
-        if (Array.isArray(o.items)) {
-          o.items.forEach((it) => {
-            const name = (it.itemName || it.itemName || '').trim().toLowerCase();
-            if (name === (dish.name || '').trim().toLowerCase() || it.itemId === dish.id) {
-              const q = Number(it.quantity || 1);
-              soldQty += q;
-              revenuePaise += Number(it.lineTotalPaise || ((dish.pricePaise || 0) * q));
-            }
-          });
-        }
-      });
+        dayTotalDishesSold += soldQty;
+        dayTotalRevenuePaise += revenuePaise;
 
-      const price = ((dish.pricePaise || (dish.priceInr ? dish.priceInr * 100 : 0)) / 100).toFixed(2);
-      const stock = typeof dish.currentStock === 'number' ? (dish.currentStock > 0 ? `${dish.currentStock} in stock` : 'Out of Stock') : 'Available';
-      const status = dish.isAvailable !== false ? 'Available' : 'Sold Out';
-      const rev = (revenuePaise / 100).toFixed(2);
+        const price = ((dish.pricePaise || (dish.priceInr ? dish.priceInr * 100 : 0)) / 100).toFixed(2);
+        const stock = dStr === businessDate
+          ? (typeof dish.currentStock === 'number'
+              ? (dish.currentStock > 0 ? `${dish.currentStock} in stock` : '0 (Sold Out / Day Start)')
+              : 'Available')
+          : (soldQty > 0 ? '0 (Day Closed)' : '0 (Closed)');
+        const status = dStr === businessDate
+          ? (dish.isAvailable !== false && (typeof dish.currentStock !== 'number' || dish.currentStock > 0) ? 'Available' : 'Sold Out')
+          : (soldQty > 0 ? 'Settled on Date' : 'Zero Stock (Closed)');
+        const rev = (revenuePaise / 100).toFixed(2);
 
-      sheet2RowsXml += `
+        dateDishesXml += `
     <Row ss:Height="22">
       <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${idx + 1}</Data></Cell>
       <Cell ss:StyleID="DataCellCode"><Data ss:Type="String">${escapeXml(dish.id || `dish-${idx + 1}`)}</Data></Cell>
@@ -561,18 +586,38 @@ export function generateUnifiedMasterDatabaseXml(
       <Cell ss:StyleID="DataCellCenter"><Data ss:Type="String">${escapeXml(status)}</Data></Cell>
       <Cell ss:StyleID="DataCellMoney"><Data ss:Type="Number">${rev}</Data></Cell>
     </Row>`;
-    });
-  }
+      });
 
-  // Prepend Date & Day Header for Menu Update
-  const menuDayInfo = getIstDayAndDateString(businessDate);
-  if (sheet2RowsXml) {
-    sheet2RowsXml = `
+      allDatesMenuRevenuePaise += dayTotalRevenuePaise;
+
+      // Wrap this day's dishes in a prominent Date Banner & Day Subtotal
+      sheet2RowsXml += `
+    <!-- Prominent Date Section for ${escapeXml(dStr)} -->
     <Row ss:Height="28">
       <Cell ss:MergeAcross="9" ss:StyleID="DayDateHeader">
-        <Data ss:Type="String">${escapeXml(menuDayInfo.headerLabel)}</Data>
+        <Data ss:Type="String">${escapeXml(dInfo.headerLabel)}</Data>
       </Cell>
-    </Row>` + sheet2RowsXml;
+    </Row>
+    ${dateDishesXml}
+    <Row ss:Height="24">
+      <Cell ss:MergeAcross="5" ss:StyleID="DayDateSubtotal">
+        <Data ss:Type="String">Day Menu Subtotal (${escapeXml(dInfo.dayName)} - ${escapeXml(dStr)}): ${dayTotalDishesSold} Dishes Sold</Data>
+      </Cell>
+      <Cell ss:StyleID="DataCellCenter"><Data ss:Type="Number">${dayTotalDishesSold}</Data></Cell>
+      <Cell ss:MergeAcross="1" ss:StyleID="DataCellCenter"><Data ss:Type="String">Daily Menu Revenue</Data></Cell>
+      <Cell ss:StyleID="DataCellMoneyTotal"><Data ss:Type="Number">${(dayTotalRevenuePaise / 100).toFixed(2)}</Data></Cell>
+    </Row>
+    <Row ss:Height="6"/>`;
+    });
+
+    // Grand Menu Total across all days
+    sheet2RowsXml += `
+    <Row ss:Height="26">
+      <Cell ss:MergeAcross="8" ss:StyleID="SectionHeader">
+        <Data ss:Type="String">TOTAL AUDITED MENU REVENUE ACROSS ALL RECORDED DATES:</Data>
+      </Cell>
+      <Cell ss:StyleID="DataCellMoneyTotal"><Data ss:Type="Number">${(allDatesMenuRevenuePaise / 100).toFixed(2)}</Data></Cell>
+    </Row>`;
   }
 
   const sheet2Xml = `
@@ -597,7 +642,7 @@ export function generateUnifiedMasterDatabaseXml(
       </Row>
       <Row ss:Height="22">
         <Cell ss:MergeAcross="9" ss:StyleID="SubTitle">
-          <Data ss:Type="String">Live Menu Catalog • Daily Stock Remaining • Item Sold Counts • Date: ${escapeXml(businessDate)}</Data>
+          <Data ss:Type="String">Date-Wise Daily Menu Status • Item Sold Counts • Daily Stock Tracking • Business Date: ${escapeXml(businessDate)}</Data>
         </Cell>
       </Row>
       <Row ss:Height="10"/>
@@ -610,7 +655,7 @@ export function generateUnifiedMasterDatabaseXml(
         <Cell ss:StyleID="ColHeaderMenu"><Data ss:Type="String">Malayalam Name</Data></Cell>
         <Cell ss:StyleID="ColHeaderMenu"><Data ss:Type="String">Category</Data></Cell>
         <Cell ss:StyleID="ColHeaderMenu"><Data ss:Type="String">Price (INR)</Data></Cell>
-        <Cell ss:StyleID="ColHeaderMenu"><Data ss:Type="String">Sold Today</Data></Cell>
+        <Cell ss:StyleID="ColHeaderMenu"><Data ss:Type="String">Sold On Date</Data></Cell>
         <Cell ss:StyleID="ColHeaderMenu"><Data ss:Type="String">Stock Left</Data></Cell>
         <Cell ss:StyleID="ColHeaderMenu"><Data ss:Type="String">Status</Data></Cell>
         <Cell ss:StyleID="ColHeaderMenu"><Data ss:Type="String">Revenue (INR)</Data></Cell>

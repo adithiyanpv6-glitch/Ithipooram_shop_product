@@ -270,39 +270,7 @@ export async function pushLiveUpdateToGoogleWorkspace(): Promise<{ success: bool
       }),
     }));
 
-    // Preserve history: Include dishes that were sold today even if deleted from active menu!
-    const existingDishNames = new Set(
-      enrichedMenuCategories.flatMap((c) => (c.items || []).map((i) => i.name.trim().toLowerCase()))
-    );
-    const archivedItems: any[] = [];
-    allTodaySales.forEach((s) => {
-      (s.items || []).forEach((si: any) => {
-        const dName = (si.itemName || si.name || '').trim();
-        const lower = dName.toLowerCase();
-        if (dName && !existingDishNames.has(lower)) {
-          existingDishNames.add(lower);
-          const price = (si.pricePaise || 0) / 100;
-          const qty = Number(si.quantity || si.qty || 1);
-          archivedItems.push({
-            id: si.itemId || `archived-${archivedItems.length + 1}`,
-            name: dName,
-            malayalamName: si.itemMalayalamName || '',
-            price,
-            soldQuantity: qty,
-            totalRevenueInr: qty * price,
-            currentStock: 0,
-            isAvailable: false,
-          });
-        }
-      });
-    });
-    if (archivedItems.length > 0) {
-      enrichedMenuCategories.push({
-        id: 'cat-archived',
-        name: 'Daily Delicacies',
-        items: archivedItems,
-      } as any);
-    }
+    // Menu categories strictly reflect user-created categories - never add default/fake categories
 
     // 2. Enrich tables with both All-Time Sales Data and Today's Live Stats
     const allHistorical = db.historicalSales || [];

@@ -143,15 +143,16 @@ export async function POST(request: Request) {
     db.kitchenTickets = [];
     db.orders = [];
 
-    // Replenish menu dish stock for tomorrow morning
+    // PERMANENT MENU & ZERO DAILY PENDING STOCK AT DAY CLOSE:
+    // Menu item names, categories, and prices are permanently preserved.
+    // Any remaining or pending stocks are automatically reset to zero at day's end,
+    // ready for the shopkeeper to input fresh daily stock in the morning.
     if (Array.isArray(db.menuCategories)) {
       for (const cat of db.menuCategories) {
         if (!Array.isArray(cat.items)) continue;
         for (const item of cat.items) {
-          item.isAvailable = true;
-          if (typeof item.currentStock === 'number' && item.currentStock <= 5) {
-            item.currentStock = 50;
-          }
+          item.currentStock = 0;
+          item.isAvailable = false;
         }
       }
     }

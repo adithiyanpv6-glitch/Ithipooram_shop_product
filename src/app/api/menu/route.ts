@@ -42,7 +42,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Valid price (₹0 or greater) is required' }, { status: 400, headers: corsHeaders });
     }
 
-    const categoryName = (category || 'Special Delicacies').trim();
+    if (!category || !category.trim()) {
+      return NextResponse.json({ error: 'Menu category is required. Please select or enter a valid category.' }, { status: 400, headers: corsHeaders });
+    }
+
+    const categoryName = category.trim();
     let targetCat = db.menuCategories.find(
       (c) => c.name.toLowerCase() === categoryName.toLowerCase()
     );
@@ -51,7 +55,7 @@ export async function POST(request: Request) {
       targetCat = {
         id: `cat-${Date.now()}`,
         name: categoryName,
-        malayalamName: malayalamName || categoryName,
+        malayalamName: categoryName,
         items: [],
       };
       db.menuCategories.push(targetCat);

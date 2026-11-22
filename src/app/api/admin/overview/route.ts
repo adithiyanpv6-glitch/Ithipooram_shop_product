@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { db, readDailyLedger, readAllDailyLedgers } from '@/lib/serverDb';
+import fs from 'fs';
+import path from 'path';
+import { db, readDailyLedger, readAllDailyLedgers, LEDGER_DIR } from '@/lib/serverDb';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -50,11 +52,25 @@ export async function GET(request: Request) {
   const allSalesList: any[] = [];
   const knownCodes = new Set<string>();
 
-  for (const s of [...allLedgers, ...(db.historicalSales || [])]) {
+  // Disk daily ledgers are authoritative for all recorded days
+  for (const s of allLedgers) {
     const code = s.orderCode || s.invoiceNumber || s.id;
     if (code && !knownCodes.has(code)) {
       knownCodes.add(code);
       allSalesList.push(s);
+    }
+  }
+
+  // Only append from memory historicalSales if date does not have an authoritative daily ledger file
+  for (const s of (db.historicalSales || [])) {
+    const code = s.orderCode || s.invoiceNumber || s.id;
+    if (code && !knownCodes.has(code)) {
+      const d = getIstDate(s.settledAt);
+      const ledgerFile = path.join(LEDGER_DIR, `${d}.json`);
+      if (!fs.existsSync(ledgerFile)) {
+        knownCodes.add(code);
+        allSalesList.push(s);
+      }
     }
   }
 
