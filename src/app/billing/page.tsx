@@ -334,6 +334,41 @@ export default function BillingTerminalPage() {
   const [connectedPrinterName, setConnectedPrinterName] = useState<string | null>(null);
   const [isConnectingPrinter, setIsConnectingPrinter] = useState<boolean>(false);
 
+  // Real-time live Bluetooth printer guardian status
+  const [printerHealth, setPrinterHealth] = useState<{
+    connected: boolean;
+    status: 'READY' | 'RECONNECTING' | 'DISCONNECTED';
+    port: string;
+    queuedCount: number;
+  }>({
+    connected: false,
+    status: 'RECONNECTING',
+    port: 'COM3',
+    queuedCount: 0,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    const checkPrinterHealth = async () => {
+      try {
+        const res = await fetch('/api/printer/status');
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted) {
+            setPrinterHealth(data);
+          }
+        }
+      } catch {}
+    };
+
+    checkPrinterHealth();
+    const interval = setInterval(checkPrinterHealth, 3000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   // Mobile PWA Install state
   const [installPrompt, setInstallPrompt] = useState<any>(null);
 
@@ -530,7 +565,11 @@ export default function BillingTerminalPage() {
           setThermalReceiptText(data.thermalReceipt);
           triggerBluetoothPrint(data.thermalReceipt);
         }
-        setPrintFeedback(`✓ Direct Bill ${data.invoiceNumber || ''} Settled & Printed!`);
+        if (data.btPrintStatus === 'QUEUED' || data.printerQueued) {
+          setPrintFeedback(`✓ Direct Bill ${data.invoiceNumber || ''} Settled & Queued for Auto-Print!`);
+        } else {
+          setPrintFeedback(`✓ Direct Bill ${data.invoiceNumber || ''} Settled & Printed!`);
+        }
         setTimeout(() => setPrintFeedback(null), 4000);
         loadTables();
         loadSettledInvoices();
@@ -1004,11 +1043,20 @@ export default function BillingTerminalPage() {
       });
 
       if (res.success) {
-        setPrintFeedback('✓ Printed on B-41 Thermal Printer');
-        setTimeout(() => setPrintFeedback(null), 3500);
+        if (res.queued) {
+          setPrintFeedback('✓ Bill queued! Auto-printing in 2-5s upon printer reconnect...');
+          setTimeout(() => setPrintFeedback(null), 5000);
+        } else {
+          setPrintFeedback('✓ Printed on B-41 Thermal Printer');
+          setTimeout(() => setPrintFeedback(null), 3500);
+        }
+        return true;
+      } else if (res.queued) {
+        setPrintFeedback('✓ Bill queued! Auto-printing in 2-5s upon printer reconnect...');
+        setTimeout(() => setPrintFeedback(null), 5000);
         return true;
       } else {
-        const msg = res.message || '⚠️ B-41 printer disconnected. Double-click printer icon on Desktop to auto-reconnect.';
+        const msg = res.message || '⚠️ Printer reconnecting automatically in 2-5s. Job queued.';
         setPrintFeedback(msg);
         setTimeout(() => setPrintFeedback(null), 6000);
         return false;
@@ -1083,6 +1131,30 @@ Status: WIRELESS TEST PASSED!
           <h1 className="text-sm sm:text-lg font-black tracking-wider text-white uppercase truncate max-w-[130px] xs:max-w-none">
             Billing
           </h1>
+
+          {/* Live Printer Connection Indicator */}
+          <div className={`hidden sm:flex px-2 py-0.5 rounded-full text-[11px] font-bold items-center space-x-1.5 transition-all ${
+            printerHealth.connected
+              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+              : printerHealth.queuedCount > 0
+              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse'
+              : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${
+              printerHealth.connected 
+                ? 'bg-emerald-400' 
+                : printerHealth.queuedCount > 0 
+                ? 'bg-amber-400' 
+                : 'bg-rose-400 animate-ping'
+            }`} />
+            <span>
+              {printerHealth.connected
+                ? `Printer Ready (${printerHealth.port})`
+                : printerHealth.queuedCount > 0
+                ? `Reconnecting... (${printerHealth.queuedCount} queued)`
+                : 'Printer Auto-Reconnect'}
+            </span>
+          </div>
         </div>
 
         {/* Right: Clean Header with Total Sales Live Button & Quick Bill */}

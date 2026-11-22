@@ -7,7 +7,7 @@ import {
   appendToDailyLedger,
   verifyMasterPin,
 } from '@/lib/serverDb';
-import { printToSeznikBluetoothPrinter } from '@/lib/serverPrinter';
+import { printToSeznikBluetoothPrinter, getLivePrinterStatus } from '@/lib/serverPrinter';
 import { pushSettledBillToGoogleDrive, pushLiveUpdateToGoogleWorkspace } from '@/lib/googleWorkspaceSync';
 
 const corsHeaders = {
@@ -211,7 +211,8 @@ export async function POST(request: Request) {
     });
 
     // Auto-send structured JSON payload to SEZNIK Bluetooth printer asynchronously in background so POS never freezes
-    let btPrintStatus = 'SUCCESS';
+    const pStatus = getLivePrinterStatus();
+    let btPrintStatus = pStatus.connected ? 'SUCCESS' : 'QUEUED';
     let btError: string | undefined;
     try {
       const printerPayload = JSON.stringify({
@@ -234,6 +235,8 @@ export async function POST(request: Request) {
         .then((res) => {
           if (res.success) {
             console.log(`[Quick Bill] Receipt printed wirelessly on SEZNIK printer for ${invoiceNumber}`);
+          } else if (res.queued) {
+            console.log(`[Quick Bill] Receipt queued for auto-reprint upon printer reconnect for ${invoiceNumber}`);
           }
         })
         .catch((e) => console.warn(`[Quick Bill] Non-blocking print notice: ${e.message}`));
@@ -256,6 +259,7 @@ export async function POST(request: Request) {
         items: receiptItems,
         btPrintStatus,
         btError,
+        printerQueued: btPrintStatus === 'QUEUED',
       },
       { headers: corsHeaders }
     );

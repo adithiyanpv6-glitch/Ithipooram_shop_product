@@ -48,19 +48,14 @@ try {
 
     Write-Host "      -> Windows power configured: Laptop & Wi-Fi will stay 100% running with lid closed." -ForegroundColor Green
 
-    # Automatically ensure Windows Mobile Hotspot is broadcasting for 100% offline staff phones
-    try {
-        $cp = [Windows.Networking.Connectivity.NetworkInformation, Windows.Networking.Connectivity, ContentType = WindowsRuntime]::GetInternetConnectionProfile()
-        if ($cp) {
-            $tm = [Windows.Networking.NetworkOperators.NetworkOperatorTetheringManager, Windows.Networking.NetworkOperators, ContentType = WindowsRuntime]::CreateFromConnectionProfile($cp)
-            if ($tm.TetheringOperationalState -ne 'On') {
-                Write-Host "      -> Turning ON IthiPooram-POS Mobile Hotspot for staff phones..." -ForegroundColor Yellow
-                $tm.StartTetheringAsync() | Out-Null
-            } else {
-                Write-Host "      -> Mobile Hotspot is ACTIVE (Fixed IP: 192.168.137.1)" -ForegroundColor Green
-            }
-        }
-    } catch {}
+    # Autonomous 24/7 Mobile Hotspot Guardian: Keeps laptop hotspot permanently broadcasted
+    # Even if laptop Wi-Fi disconnects and reconnects to phone/router, hotspot recovers in 1-2 seconds!
+    $hotspotScript = Join-Path $appDir "scripts\hotspot_guardian.ps1"
+    if (Test-Path $hotspotScript) {
+        Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*hotspot_guardian.ps1*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+        Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$hotspotScript`" -IntervalSeconds 2" -WorkingDirectory $appDir
+        Write-Host "      -> Autonomous Hotspot Guardian active in background (auto-reconnects in 1-2s)." -ForegroundColor Green
+    }
 } catch {
     Write-Host "      -> Power settings skipped." -ForegroundColor Gray
 }
@@ -86,20 +81,26 @@ try {
     }
     Write-Host "      -> Laptop Bluetooth Radio is ACTIVE (ON)" -ForegroundColor Green
 
+    # Launch Autonomous Bluetooth Printer Guardian: 2-5s auto-reconnect, zero-freeze print queue
+    $printerGuardianScript = Join-Path $appDir "scripts\printer_guardian.ps1"
+    if (Test-Path $printerGuardianScript) {
+        Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*printer_guardian.ps1*" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+        Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$printerGuardianScript`" -IntervalSeconds 2" -WorkingDirectory $appDir
+        Write-Host "      -> Autonomous Bluetooth Printer Guardian active (2-5s auto-reconnect & zero-freeze)." -ForegroundColor Green
+    }
+
     # Check for Bluetooth Serial COM port
     $btPorts = [System.IO.Ports.SerialPort]::GetPortNames()
     if ($btPorts -and $btPorts.Length -gt 0) {
-        Write-Host "      -> SEZNIK Bluetooth Port Connected: $($btPorts -join ', ')" -ForegroundColor Green
+        Write-Host "      -> SEZNIK Bluetooth Port Detected: $($btPorts -join ', ')" -ForegroundColor Green
         
-        # Every day when START POS is started: automatically print a sample bill slip with brand calligraphy & Welcome Owner!
-        Write-Host "      -> Daily Startup: Printing 'Welcome Owner' sample bill slip on SEZNIK..." -ForegroundColor Yellow
+        # Every day when START POS is started: print Welcome Owner sample slip if printer power is ON
         $welcomeScript = Join-Path $appDir "scripts\print_startup_welcome.ps1"
         if (Test-Path $welcomeScript) {
             powershell.exe -NoProfile -ExecutionPolicy Bypass -File $welcomeScript | Out-Null
-            Write-Host "      -> [SUCCESS] SEZNIK Printer verified & 'Welcome Owner' slip printed!" -ForegroundColor Green
         }
     } else {
-        Write-Host "      -> SEZNIK Bluetooth port not detected yet. Ensure printer power is ON." -ForegroundColor Yellow
+        Write-Host "      -> SEZNIK Bluetooth port in standby. Guardian will auto-connect the moment printer power is turned ON." -ForegroundColor Yellow
     }
 } catch {
     Write-Host "      -> Bluetooth printer check complete." -ForegroundColor Gray
@@ -322,12 +323,26 @@ Write-Host "`nYOU CAN NOW CLOSE THE LAPTOP LID." -ForegroundColor Yellow
 Write-Host "The server will keep running in the background without sleeping." -ForegroundColor White
 Write-Host "Press Ctrl+C in this window when closing the restaurant for the day.`n" -ForegroundColor Gray
 
-# Continuous Watchdog Supervisor: Keeps POS server permanently online 24/7
+# Continuous Autonomous Supervisor: Keeps POS Server + Hotspot Guardian + Printer Guardian permanently active 24/7
 while ($true) {
     Start-Sleep -Seconds 5
+
+    # 1. POS Server Watchdog
     $checkNode = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
     if (-not $checkNode) {
         Write-Host "[Watchdog] POS Server offline, auto-restarting..." -ForegroundColor Yellow
         Start-Process -FilePath "cmd.exe" -ArgumentList "/c npm run start" -WorkingDirectory $appDir -WindowStyle Minimized | Out-Null
+    }
+
+    # 2. Hotspot Guardian Watchdog (Auto-recovers hotspot within 1-2s if laptop Wi-Fi disconnects/reconnects)
+    $hgRunning = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*hotspot_guardian.ps1*" }
+    if (-not $hgRunning -and (Test-Path $hotspotScript)) {
+        Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$hotspotScript`" -IntervalSeconds 2" -WorkingDirectory $appDir
+    }
+
+    # 3. Printer Guardian Watchdog (2-5s auto-reconnects SEZNIK printer and flushes queues without human action)
+    $pgRunning = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*printer_guardian.ps1*" }
+    if (-not $pgRunning -and (Test-Path $printerGuardianScript)) {
+        Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$printerGuardianScript`" -IntervalSeconds 2" -WorkingDirectory $appDir
     }
 }

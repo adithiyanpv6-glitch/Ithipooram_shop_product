@@ -132,6 +132,41 @@ export default function RootHomePage() {
       .catch(() => {});
   }, []);
 
+  // Live Bluetooth Printer Health & Autonomous Reconnect State
+  const [printerHealth, setPrinterHealth] = useState<{
+    connected: boolean;
+    status: string;
+    queuedCount: number;
+  }>({
+    connected: true,
+    status: 'READY',
+    queuedCount: 0,
+  });
+
+  useEffect(() => {
+    let active = true;
+    const fetchPrinterHealth = () => {
+      fetch('/api/printer/status', { cache: 'no-store' })
+        .then((r) => r.json())
+        .then((d) => {
+          if (active && d && typeof d.connected === 'boolean') {
+            setPrinterHealth({
+              connected: d.connected,
+              status: d.status || (d.connected ? 'READY' : 'RECONNECTING'),
+              queuedCount: d.queuedCount || 0,
+            });
+          }
+        })
+        .catch(() => {});
+    };
+    fetchPrinterHealth();
+    const interval = setInterval(fetchPrinterHealth, 3000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   const availableDayDishes = useMemo(() => {
     return allDishes.filter((d: any) => d.isAvailable !== false);
   }, [allDishes]);
@@ -434,7 +469,11 @@ export default function RootHomePage() {
       setIsPreviewingDirectBill(true);
 
       const totalInr = (data.grandTotalPaise / 100).toFixed(2);
-      const printStatusText = data.btPrintStatus === 'SUCCESS' ? '✓ Printed via SEZNIK Bluetooth' : '✓ Bill Generated & Ready';
+      const printStatusText = data.btPrintStatus === 'SUCCESS' 
+        ? '✓ Printed via SEZNIK Bluetooth' 
+        : data.btPrintStatus === 'QUEUED'
+        ? '✓ Bill Saved & Queued for Auto-Print'
+        : '✓ Bill Generated & Ready';
       setDirectBillNotice(`${printStatusText} (Inv #${data.invoiceNumber} • ₹${totalInr})`);
 
       // Refresh overview dashboard so real-time sales graph & KPIs immediately reflect this sale
@@ -2089,6 +2128,31 @@ export default function RootHomePage() {
                         </div>
                       </div>
 
+                      {/* Real-Time Live Printer Status Notice */}
+                      {!printerHealth.connected ? (
+                        <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold flex items-center space-x-2">
+                          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 animate-pulse" />
+                          <div>
+                            <p className="font-extrabold">⚠️ Printer Reconnecting Automatically...</p>
+                            <p className="text-[11px] text-amber-700 font-medium">
+                              Bills will queue and print immediately within 2-5s upon printer power ON.
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-2.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                            <span>✓ SEZNIK B-41 Printer Connected & Ready</span>
+                          </div>
+                          {printerHealth.queuedCount > 0 && (
+                            <span className="text-[10px] bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full font-black">
+                              {printerHealth.queuedCount} in queue
+                            </span>
+                          )}
+                        </div>
+                      )}
+
                       {/* Authorize & Print 58mm Thermal Bill Button */}
                       <button
                         type="button"
@@ -2103,8 +2167,10 @@ export default function RootHomePage() {
                         )}
                         <span>
                           {isPrintingDirectBill
-                            ? 'Printing 58mm Bill...'
-                            : `Authorize & Print 58mm Bill (₹${(directBillTotalPaise / 100).toFixed(2)})`}
+                            ? 'Processing & Printing...'
+                            : printerHealth.connected
+                            ? `Authorize & Print 58mm Bill (₹${(directBillTotalPaise / 100).toFixed(2)})`
+                            : `Authorize & Queue for Print (₹${(directBillTotalPaise / 100).toFixed(2)})`}
                         </span>
                       </button>
                     </div>

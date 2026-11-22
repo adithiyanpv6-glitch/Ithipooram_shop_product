@@ -72,6 +72,53 @@ public class FastRasterizer
         return bands;
     }
 }
+
+public class FastComProbe
+{
+    public static bool ProbePort(string portName, int timeoutMs = 1500)
+    {
+        try
+        {
+            System.Threading.Tasks.Task<bool> task = System.Threading.Tasks.Task.Run(() =>
+            {
+                System.IO.Ports.SerialPort sp = null;
+                try
+                {
+                    sp = new System.IO.Ports.SerialPort(portName, 9600, System.IO.Ports.Parity.None, 8, System.IO.Ports.StopBits.One);
+                    sp.Handshake = System.IO.Ports.Handshake.None;
+                    sp.DtrEnable = true;
+                    sp.RtsEnable = true;
+                    sp.WriteTimeout = 1000;
+                    sp.ReadTimeout = 1000;
+                    sp.Open();
+                    bool open = sp.IsOpen;
+                    sp.Close();
+                    sp.Dispose();
+                    return open;
+                }
+                catch
+                {
+                    if (sp != null)
+                    {
+                        try { sp.Close(); } catch { }
+                        try { sp.Dispose(); } catch { }
+                    }
+                    return false;
+                }
+            });
+
+            if (task.Wait(timeoutMs))
+            {
+                return task.Result;
+            }
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+}
 "@
 if (-not ([System.Management.Automation.PSTypeName]'FastRasterizer').Type) {
     Add-Type -TypeDefinition $csharpRasterizer -ReferencedAssemblies "System.Drawing"
@@ -372,55 +419,74 @@ try {
     $totalBytes = $initBytes.Length + $feedBytes.Length
     foreach ($b in $bands) { $totalBytes += $b.Length }
 
-    # 5. Transmit to SEZNIK Bluetooth Serial COM port with Paced Micro-Banding
+    # 5. Transmit to SEZNIK Bluetooth Serial COM port with Fast Non-Blocking Probe & Paced Micro-Banding
     $comPorts = [System.IO.Ports.SerialPort]::GetPortNames()
     if ($comPorts -and $comPorts.Length -gt 0) {
         $sortedPorts = @()
         if ($comPorts -contains "COM3") { $sortedPorts += "COM3" }
+        if ($comPorts -contains "COM4") { $sortedPorts += "COM4" }
         foreach ($p in $comPorts) {
-            if ($p -ne "COM3") { $sortedPorts += $p }
+            if ($sortedPorts -notcontains $p) { $sortedPorts += $p }
         }
 
         foreach ($port in $sortedPorts) {
-            for ($retry = 0; $retry -lt 3; $retry++) {
+            # FAST 1.5s PROBE: Verify port is reachable before opening, avoiding 15-45s OS driver hang!
+            $isReachable = [FastComProbe]::ProbePort($port, 1500)
+            if (-not $isReachable) {
+                continue
+            }
+
+            $sp = $null
+            try {
+                $sp = New-Object System.IO.Ports.SerialPort $port, 9600, None, 8, One
+                $sp.Handshake = "None"
+                $sp.DtrEnable = $true
+                $sp.RtsEnable = $true
+                $sp.WriteBufferSize = 32768
+                $sp.WriteTimeout = 5000
+                $sp.ReadTimeout = 1500
+                $sp.Open()
+
+                # Send Init Command
+                $sp.BaseStream.Write($initBytes, 0, $initBytes.Length)
+                $sp.BaseStream.Flush()
+                Start-Sleep -Milliseconds 60
+
+                # Send discrete micro-bands with 95ms spacing
+                # 24 dot rows = 3mm of paper. At 35mm/s, printing takes ~85ms.
+                # Sleeping 95ms matches the stepper motor so the buffer NEVER fills up!
+                foreach ($b in $bands) {
+                    $sp.BaseStream.Write($b, 0, $b.Length)
+                    $sp.BaseStream.Flush()
+                    Start-Sleep -Milliseconds 95
+                }
+
+                # Send final paper feed
+                $sp.BaseStream.Write($feedBytes, 0, $feedBytes.Length)
+                $sp.BaseStream.Flush()
+
+                # Drain delay: wait 600ms for motor to finish physical feed before closing Bluetooth link
+                Start-Sleep -Milliseconds 600
+
+                $sp.Close()
+                $sp.Dispose()
+                $sp = $null
+
+                # Record live status in printer_status.json
                 try {
-                    $sp = New-Object System.IO.Ports.SerialPort $port, 9600, None, 8, One
-                    $sp.Handshake = "None"
-                    $sp.DtrEnable = $true
-                    $sp.RtsEnable = $true
-                    $sp.WriteBufferSize = 32768
-                    $sp.WriteTimeout = 15000
-                    $sp.ReadTimeout = 2000
-                    $sp.Open()
+                    $stFile = Join-Path $projectRoot "data\printer_status.json"
+                    $stObj = @{ connected = $true; status = "READY"; port = $port; lastPrintedAt = (Get-Date).ToString("o") }
+                    Set-Content -Path $stFile -Value ($stObj | ConvertTo-Json -Compress) -Force -ErrorAction SilentlyContinue
+                } catch {}
 
-                    # Send Init Command
-                    $sp.BaseStream.Write($initBytes, 0, $initBytes.Length)
-                    $sp.BaseStream.Flush()
-                    Start-Sleep -Milliseconds 60
-
-                    # Send discrete micro-bands with 95ms spacing
-                    # 24 dot rows = 3mm of paper. At 35mm/s, printing takes ~85ms.
-                    # Sleeping 95ms matches the stepper motor so the buffer NEVER fills up!
-                    foreach ($b in $bands) {
-                        $sp.BaseStream.Write($b, 0, $b.Length)
-                        $sp.BaseStream.Flush()
-                        Start-Sleep -Milliseconds 95
-                    }
-
-                    # Send final paper feed
-                    $sp.BaseStream.Write($feedBytes, 0, $feedBytes.Length)
-                    $sp.BaseStream.Flush()
-
-                    # Drain delay: wait 800ms for motor to finish physical feed before closing Bluetooth link
-                    Start-Sleep -Milliseconds 800
-
-                    $sp.Close()
-                    $sp.Dispose()
-
-                    Write-Output (@{ success = $true; channel = "Bluetooth_Serial_COM"; port = $port; bytes = $totalBytes; bands = $bands.Count } | ConvertTo-Json -Compress)
-                    exit 0
-                } catch {
-                    Start-Sleep -Milliseconds 400
+                Write-Output (@{ success = $true; channel = "Bluetooth_Serial_COM"; port = $port; bytes = $totalBytes; bands = $bands.Count } | ConvertTo-Json -Compress)
+                exit 0
+            } catch {
+                # Error on port write, clean up safely
+            } finally {
+                if ($sp) {
+                    try { if ($sp.IsOpen) { $sp.Close() } } catch {}
+                    try { $sp.Dispose() } catch {}
                 }
             }
         }
